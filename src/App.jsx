@@ -81,44 +81,9 @@ const defaultProfile = {
 
 const profileFields = [
   {
-    key: 'lifeStage',
-    label: '现在在哪个阶段',
-    placeholder: '比如：毕业一年，在大厂边缘岗位，想转产品但没有作品',
-  },
-  {
     key: 'currentPressure',
-    label: '最近最重的压力',
-    placeholder: '比如：房租、论文、绩效、家里催问、感情关系、找工作',
-  },
-  {
-    key: 'goal',
-    label: '最想保住或完成的事',
-    placeholder: '比如：三个月做出作品集，先把现金流稳住',
-  },
-  {
-    key: 'avoidancePattern',
-    label: '最常见的逃避方式',
-    placeholder: '比如：刷视频、游戏、熬夜、已读不回、乱花钱',
-  },
-  {
-    key: 'support',
-    label: '能托住你的人或关系',
-    placeholder: '比如：一个朋友、家人、同学、同事，或者暂时没有',
-  },
-  {
-    key: 'moneyState',
-    label: '钱和生活底盘',
-    placeholder: '比如：月光、负债、房租压力、还行但不敢停',
-  },
-  {
-    key: 'healthState',
-    label: '身体和精力状态',
-    placeholder: '比如：睡很晚、胃不舒服、焦虑、还能扛',
-  },
-  {
-    key: 'hiddenWish',
-    label: '没说出口的想法',
-    placeholder: '比如：希望被理解，不想再一直装没事',
+    label: '你的处境',
+    placeholder: '老板总有「紧急」项目，晋升空间见顶，又怕被 AI 替代。',
   },
 ];
 
@@ -951,50 +916,19 @@ function App() {
   }
 
   function generateProfilePath() {
+    // 律师 Demo：填好年龄/城市后直接进入固定的 5 步律师职场剧本（不走旧的通用生成器/DeepSeek 剧情，
+    // 保证演示稳定、主题一致；LLM 的亮点放在结局的「同路人·真实预测」）。
     const nextProfile = normalizeProfile(draftProfile);
-    const runId = generationRunRef.current + 1;
-    const localEvents = generatePersonalizedScenario(nextProfile, persona);
-
-    generationRunRef.current = runId;
-    setIsGeneratingPath(true);
+    generationRunRef.current += 1;
+    setIsGeneratingPath(false);
     restart(persona.id, {
-      events: localEvents,
+      events: scenarioEvents,
       profile: nextProfile,
       personalized: true,
-      source: '本地预览',
-      note: '已先生成可玩的个人路径；DeepSeek 正在后台优化，回来后会自动替换。',
-      keepPendingGeneration: true,
+      source: '律师剧本',
+      note: `${nextProfile.age || ''} 岁 · ${nextProfile.city || '北京'} 的律师路径已就绪，开始选择吧。`,
       profileExpanded: false,
     });
-
-    generateScenarioWithLocalCodex(nextProfile, persona)
-      .then((result) => {
-        if (generationRunRef.current !== runId) return;
-
-        if (movesMadeRef.current === 0) {
-          restart(persona.id, {
-            events: result.events,
-            profile: nextProfile,
-            personalized: true,
-            source: 'DeepSeek 已完成',
-            note: `${result.note}，现在可以开始选择。`,
-            keepPendingGeneration: true,
-            profileExpanded: false,
-          });
-          return;
-        }
-
-        setGenerationSource('DeepSeek 已完成');
-        setGenerationNote(`${result.note}；你已经开始走当前路径，本轮不打断。再次生成可刷新成 AI 版本。`);
-      })
-      .catch((error) => {
-        if (generationRunRef.current !== runId) return;
-        setGenerationSource('本地预览');
-        setGenerationNote(explainGenerationError(error));
-      })
-      .finally(() => {
-        if (generationRunRef.current === runId) setIsGeneratingPath(false);
-      });
   }
 
   function applyMove(move, source = 'choice') {
@@ -1207,19 +1141,11 @@ function ProfileSetupPanel({
       ) : (
         <div className="profile-grid">
           <label className="profile-field compact-field">
-            <span>名字</span>
-            <input
-              value={profile.name}
-              onChange={(event) => updateField('name', event.target.value)}
-              placeholder="小林"
-            />
-          </label>
-          <label className="profile-field compact-field">
             <span>年龄</span>
             <input
               value={profile.age}
               onChange={(event) => updateField('age', event.target.value)}
-              placeholder="24"
+              placeholder="30"
             />
           </label>
           <label className="profile-field compact-field">
@@ -1227,7 +1153,7 @@ function ProfileSetupPanel({
             <input
               value={profile.city}
               onChange={(event) => updateField('city', event.target.value)}
-              placeholder="杭州"
+              placeholder="北京"
             />
           </label>
 
