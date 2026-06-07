@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -1111,6 +1111,14 @@ function App() {
     }
   }
 
+  // 走到结局时自动召唤「同路人」，让收尾落在「一群人后来都还好」。
+  useEffect(() => {
+    if (isFinished && !cohort && !cohortLoading && !cohortError) {
+      loadCohort();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinished]);
+
   function restart(nextPersonaId = personaId, override = {}) {
     if (!override.keepPendingGeneration) {
       generationRunRef.current += 1;
@@ -1331,13 +1339,15 @@ function App() {
         <ForecastPanel forecast={forecast} inertia={getCurrentInertia(stats)} />
       )}
 
-      <CohortPanel
-        cohort={cohort}
-        loading={cohortLoading}
-        error={cohortError}
-        onLoad={loadCohort}
-        movesMade={movesMade}
-      />
+      {isFinished && (
+        <CohortPanel
+          cohort={cohort}
+          loading={cohortLoading}
+          error={cohortError}
+          onLoad={loadCohort}
+          movesMade={movesMade}
+        />
+      )}
     </main>
   );
 }
