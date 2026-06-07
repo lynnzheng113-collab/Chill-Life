@@ -821,14 +821,14 @@ async function generateScenarioWithLocalCodex(profile, persona) {
 
 function explainGenerationError(error) {
   const message = String(error?.message || '');
-  if (message.includes('DEEPSEEK_API_KEY')) return 'DeepSeek Key 没配好，已保留本地预览路径。';
+  if (message.includes('DEEPSEEK_API_KEY')) return 'DeepSeek Key 没配好；当前本地路径已经可玩。';
   if (message.includes('returned too few') || message.includes('valid events')) {
-    return 'DeepSeek 返回格式不完整，已保留本地预览路径。';
+    return 'DeepSeek 这一轮返回不完整；当前本地路径已经可玩，可点重新生成再试。';
   }
   if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
-    return 'DeepSeek 网络请求暂时没通，已保留本地预览路径。';
+    return 'DeepSeek 网络暂时没通；当前本地路径已经可玩，可点重新生成再试。';
   }
-  return 'DeepSeek 暂时没成功，已保留本地预览路径。';
+  return 'DeepSeek 这一轮没有替换成功；当前本地路径已经可玩，可点重新生成再试。';
 }
 
 function applyDelta(stats, delta) {
