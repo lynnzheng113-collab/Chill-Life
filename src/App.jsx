@@ -785,38 +785,57 @@ function completeScenario(events) {
   return [...events, ...scenarioEvents].slice(0, MAX_TURNS + 1);
 }
 
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 async function generateScenarioWithLocalCodex(profile, persona) {
   // DeepSeek adapter contract:
   // input: { profile, persona, maxTurns: MAX_TURNS }
   // output: Array<{ id, phase, title, body, thought, choices }>
   // each choice: { label, description, tag, tone, delta, journal }
   // Vite dev server keeps DEEPSEEK_API_KEY server-side in /api/deepseek-scenario.
-  const response = await fetch('/api/deepseek-scenario', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      profile,
-      persona,
-      maxTurns: MAX_TURNS,
-      maxDeepSeekEvents: DEEPSEEK_EVENT_TARGET,
-    }),
-  });
+  let lastError = null;
 
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    throw new Error(errorBody.error || `DeepSeek request failed: ${response.status}`);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch('/api/deepseek-scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({
+          profile,
+          persona,
+          maxTurns: MAX_TURNS,
+          maxDeepSeekEvents: DEEPSEEK_EVENT_TARGET,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || `DeepSeek request failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (!Array.isArray(result.events) || result.events.length < 3) {
+        throw new Error('DeepSeek did not return enough valid events');
+      }
+
+      return {
+        source: 'DeepSeek',
+        note: `${result.model || 'deepseek'} 已生成前 ${result.events.length} 幕 AI 定制剧情`,
+        events: completeScenario(result.events),
+      };
+    } catch (error) {
+      lastError = error;
+      if (String(error?.message || '').includes('DEEPSEEK_API_KEY')) break;
+      if (attempt < 2) await wait(900);
+    }
   }
 
-  const result = await response.json();
-  if (!Array.isArray(result.events) || result.events.length < 3) {
-    throw new Error('DeepSeek did not return enough valid events');
-  }
-
-  return {
-    source: 'DeepSeek',
-    note: `${result.model || 'deepseek'} 已生成前 ${result.events.length} 幕 AI 定制剧情`,
-    events: completeScenario(result.events),
-  };
+  throw lastError || new Error('DeepSeek request failed');
 }
 
 function explainGenerationError(error) {
@@ -825,7 +844,7 @@ function explainGenerationError(error) {
   if (message.includes('returned too few') || message.includes('valid events')) {
     return 'DeepSeek 这一轮返回不完整；当前本地路径已经可玩，可点重新生成再试。';
   }
-  if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+  if (message.includes('Failed to fetch') || message.includes('fetch failed') || message.includes('NetworkError')) {
     return 'DeepSeek 网络暂时没通；当前本地路径已经可玩，可点重新生成再试。';
   }
   return 'DeepSeek 这一轮没有替换成功；当前本地路径已经可玩，可点重新生成再试。';
