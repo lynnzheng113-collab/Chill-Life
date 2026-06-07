@@ -48,6 +48,12 @@ npm run dev
 https://chill-life.pages.dev
 ```
 
+GitHub Pages：
+
+```text
+https://lynnzheng113-collab.github.io/Chill-Life/
+```
+
 线上 DeepSeek Key 放在 Cloudflare Pages Secret 里，代码仓库不会提交真实 Key。需要更新线上 Key 时执行：
 
 ```bash
@@ -60,6 +66,8 @@ npx wrangler pages secret put DEEPSEEK_API_KEY --project-name chill-life
 npm run build
 npx wrangler pages deploy dist --project-name chill-life --branch main
 ```
+
+GitHub Pages 会在推送到 `main` 后通过 GitHub Actions 自动部署。GitHub Pages 是静态站点，DeepSeek 请求会调用 Cloudflare Pages 上的 `/api/deepseek-scenario`。
 
 ## 常用命令
 

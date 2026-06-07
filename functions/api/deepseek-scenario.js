@@ -65,7 +65,12 @@ function normalizeDeepSeekEvents(events, eventTarget = DEEPSEEK_EVENT_TARGET) {
 function jsonResponse(status, payload) {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: {
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json; charset=utf-8',
+    },
   });
 }
 
@@ -211,7 +216,14 @@ export async function onRequestPost(context) {
 
 export function onRequest(context) {
   if (context.request.method === 'OPTIONS') {
-    return new Response(null, { status: 204 });
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   }
 
   return jsonResponse(405, { error: 'Method not allowed' });

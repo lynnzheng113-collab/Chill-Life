@@ -22,6 +22,7 @@ import {
 
 const MAX_TURNS = 8;
 const DEEPSEEK_EVENT_TARGET = 4;
+const DEEPSEEK_API_ENDPOINT = import.meta.env.VITE_DEEPSEEK_API_URL || '/api/deepseek-scenario';
 
 const personas = [
   {
@@ -801,7 +802,7 @@ async function generateScenarioWithLocalCodex(profile, persona) {
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const response = await fetch('/api/deepseek-scenario', {
+      const response = await fetch(DEEPSEEK_API_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
