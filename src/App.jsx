@@ -20,7 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 
-const MAX_TURNS = 8;
+const MAX_TURNS = 5;
 const DEEPSEEK_EVENT_TARGET = 4;
 const DEEPSEEK_API_ENDPOINT = import.meta.env.VITE_DEEPSEEK_API_URL || '/api/deepseek-scenario';
 const DEEPSEEK_COHORT_ENDPOINT = import.meta.env.VITE_DEEPSEEK_COHORT_URL || '/api/deepseek-cohort';
@@ -43,81 +43,40 @@ async function fetchCohort({ profile, persona, stats, path, leading }) {
   return data;
 }
 
+// 律师 Demo：单一主角，聚焦职场维度。
 const personas = [
   {
-    id: 'office',
-    label: '上班第2年',
-    title: '刚毕业两年的职场人',
-    scene: '工资够活，热情不够用，周末总在补觉和自责之间切换。',
+    id: 'lawyer',
+    label: '北京律师·第5年',
+    title: '在律所卷了 5 年的执业律师',
+    scene: '老板隔三差五甩来「紧急」项目，晋升空间见顶；又天天刷到 AI 写法律文书的新闻，想转 AI 行业，却一点经验都没有。',
     stats: {
-      energy: 46,
-      health: 68,
-      money: 3200,
-      career: 50,
-      relationships: 55,
-      selfWorth: 48,
-      avoidance: 64,
-      opportunity: 43,
-    },
-  },
-  {
-    id: 'freelance',
-    label: '自由职业',
-    title: '接单不稳定的自由职业者',
-    scene: '时间看起来很多，现金流像天气，最大的敌人是没有边界的一天。',
-    stats: {
-      energy: 52,
-      health: 61,
-      money: 2100,
-      career: 44,
-      relationships: 48,
-      selfWorth: 54,
-      avoidance: 58,
-      opportunity: 61,
-    },
-  },
-  {
-    id: 'exam',
-    label: '考研边缘',
-    title: '在备考和找工作之间摇摆的人',
-    scene: '计划表很满，执行很薄，最常见的安慰是明天一定开始。',
-    stats: {
-      energy: 42,
-      health: 57,
-      money: 1500,
-      career: 35,
-      relationships: 51,
-      selfWorth: 43,
-      avoidance: 71,
-      opportunity: 49,
+      boundary: 32,
+      growth: 22,
+      ease: 38,
     },
   },
 ];
 
-// 反焦虑改版：数值语义全部正向化，不再有「越高越糟」的惩罚式指标。
+// 律师 Demo：只保留 3 个工作维度，全部正向（越高越好），不再有惩罚式指标。
 const statMeta = [
-  { key: 'energy', label: '精力', icon: Battery, color: '#3d6fd8' },
-  { key: 'health', label: '健康', icon: Heart, color: '#d95f4f' },
-  { key: 'money', label: '现金', icon: Wallet, color: '#b77a13' },
-  { key: 'career', label: '做事手感', icon: Briefcase, color: '#327f68' },
-  { key: 'relationships', label: '关系', icon: Users, color: '#7b5ab6' },
-  { key: 'selfWorth', label: '自我接纳', icon: Shield, color: '#2c8aa1' },
-  { key: 'avoidance', label: '松弛度', icon: Heart, color: '#6f9b6a' },
-  { key: 'opportunity', label: '可能性', icon: Sparkles, color: '#b48a00' },
+  { key: 'boundary', label: '边界感', icon: Shield, color: '#2c8aa1' },
+  { key: 'growth', label: '转型力', icon: Sparkles, color: '#327f68' },
+  { key: 'ease', label: '安心感', icon: Heart, color: '#6f9b6a' },
 ];
 
 const defaultProfile = {
-  name: '小林',
-  age: '24',
-  city: '杭州',
-  lifeStage: '上班第二年，想换方向但还没有作品和底气。',
-  currentPressure: '房租、早会、项目卡住、父母问近况时不知道怎么回答。',
-  goal: '三个月内做出一个能展示能力的小作品，同时把睡眠和现金流稳住。',
-  avoidancePattern: '一焦虑就刷短视频、熬夜、把重要消息拖到最后才回。',
-  support: '有一个愿意散步聊天的朋友，但最近联系变少了。',
-  moneyState: '现金够撑一个月，但没有安全垫，看到分期广告会心动。',
-  healthState: '肩颈紧、睡眠晚、周末经常补觉。',
-  hiddenWish: '希望别人别只觉得我懒，而是看见我其实卡住了。',
+  name: '小李',
+  age: '30',
+  city: '北京',
+  lifeStage: '北京律师，执业第 5 年，想转 AI 行业但没经验。',
+  currentPressure: '老板总有「紧急」项目，晋升空间见顶，又怕被 AI 替代。',
+  goal: '把 AI 技能学起来，给自己多留一条路，同时别被工作榨干。',
+  avoidancePattern: '一焦虑就刷手机看「AI 取代律师」的新闻，越看越慌。',
+  support: '有个转行做法律 AI 的旧同学，但还没好好聊过。',
+  moneyState: '律师收入还行，不至于断粮，但不敢轻易裸辞。',
+  healthState: '常熬夜赶老板的急活，肩颈和睡眠都一般。',
+  hiddenWish: '希望这 5 年的经验不是白费，AI 时代还用得上。',
 };
 
 const profileFields = [
@@ -167,338 +126,203 @@ const profileFields = [
 // thought 从「点出代价」改成「替你卸下内疚」。核心：最坏也不过如此。
 const scenarioEvents = [
   {
-    id: 'rent',
+    id: 'urgent-night',
     phase: '第 1 晚',
-    title: '房租提醒在 23:48 弹出来',
-    body: '你本来只想刷十分钟，结果外卖盒还没扔，明早的会也没准备。手机屏幕上躺着房租提醒和几条没读的工作群消息。',
-    thought: '账单不会因为你今晚没看就翻倍。它会安安静静地等你，明天再处理也完全来得及。',
+    title: '老板 23:40 甩来「紧急」项目',
+    body: '微信弹出：「这个明早要，辛苦下。」你心里清楚，这「紧急」多半是他没提前安排。你本来都准备睡了。',
+    thought: '这种「紧急」十有八九拖一晚也死不了人。你今晚的睡眠，比他的临时起意值钱。',
     choices: [
       {
-        label: '继续刷，等困意盖过去',
-        description: '今晚先放过自己，账单明天还在那儿，跑不掉也不会变大。',
-        tag: '今晚先歇',
+        label: '硬扛到凌晨做完',
+        description: '熬夜交差，他满意，你顶着黑眼圈。',
+        tag: '连夜赶工',
         tone: 'slump',
-        delta: { energy: 6, health: 1, selfWorth: -1, avoidance: 5 },
+        delta: { ease: -3, growth: -1, boundary: -2 },
+        journal: '你又熬了一夜。项目交了，老板一句「辛苦」就没下文——但天没塌，你还能补觉。',
       },
       {
-        label: '只做十分钟账本',
-        description: '不解决人生，只是看一眼缺口——通常没你想的多。',
-        tag: '看一眼缺口',
-        tone: 'steady',
-        delta: { energy: -3, money: 120, career: 2, selfWorth: 6, avoidance: -4, opportunity: 3 },
+        label: '回「明早 9 点前给您」',
+        description: '不秒回、不熬夜，给个合理时间。',
+        tag: '给个期限',
+        tone: 'growth',
+        delta: { boundary: 8, ease: 4 },
+        journal: '你没立刻跳起来。第二天他也没说什么——原来「紧急」是可以商量的。',
       },
       {
-        label: '找朋友借一点周转',
-        description: '开口有点难，但朋友大多比你想的更愿意搭把手。',
-        tag: '求助一次',
-        tone: 'bond',
-        delta: { energy: -2, money: 900, relationships: 7, selfWorth: 3, avoidance: -3, opportunity: 2 },
+        label: '装没看见，先睡了',
+        description: '已读不回，明早再说。',
+        tag: '今晚先睡',
+        tone: 'slump',
+        delta: { ease: 5, boundary: 3, growth: -1 },
+        journal: '你关了手机睡了。早上他没追问，项目照样推进——少回一条消息，世界没事。',
       },
     ],
   },
   {
-    id: 'meeting',
+    id: 'scolded',
     phase: '第 2 天',
-    title: '早会轮到你同步进度',
-    body: '项目其实卡住三天了。你可以继续说快好了，也可以承认卡点，或者把它先放一放。',
-    thought: '一次说得不漂亮，没人会因此记你一辈子。做事手感掉了还能补，谁都有卡住的时候。',
+    title: '老板当众把你训了一通',
+    body: '一个小格式问题，老板在会上当着同事的面数落你。你脸有点烫，手在桌下握紧。',
+    thought: '他的脾气是他的问题，不是你能力的证明。当众训人的人，往往最怕别人不吃这套。',
     choices: [
       {
-        label: '说快好了，先过关',
-        description: '会议平稳过去。这点小拖延，没人会真的揪着不放。',
-        tag: '先稳住',
-        tone: 'slump',
-        delta: { energy: -1, career: -2, selfWorth: -1, avoidance: 5 },
-      },
-      {
-        label: '说清卡点和下一步',
-        description: '不用显得完美，说出来别人反而能搭把手。',
-        tag: '说出卡点',
+        label: '平静回一句、划清边界',
+        description: '「这个我改，但有意见私下说更高效。」不卑不亢。',
+        tag: '当场划边界',
         tone: 'growth',
-        delta: { energy: -5, career: 8, relationships: 4, selfWorth: 7, avoidance: -6, opportunity: 6 },
+        delta: { boundary: 10, ease: 3 },
+        journal: '他愣了一下，没再说。之后对你客气了些，「紧急」也少甩了——边界划出来，他反而记住了你的分寸。',
       },
       {
-        label: '先把它放一放',
-        description: '今天没力气就先搁着，卡点不会因为你不提就恶化。',
-        tag: '暂时搁置',
+        label: '当场忍了，自己消化',
+        description: '低头认了，散会。情绪回头再说。',
+        tag: '先忍这回',
         tone: 'slump',
-        delta: { energy: 3, career: -2, selfWorth: -1, avoidance: 5 },
-      },
-    ],
-  },
-  {
-    id: 'friend',
-    phase: '第 3 晚',
-    title: '朋友约你吃饭，说你最近像消失了',
-    body: '你知道见面会好一点，但也知道出门、花钱、解释近况都很累。聊天框停在“今晚有空吗”。',
-    thought: '真朋友不会因为你消失一阵就走掉。等你有力气了再回，关系还在那儿。',
-    choices: [
-      {
-        label: '今晚先不回，攒攒电',
-        description: '一个人待着也没什么不对。等想见了再约，来得及。',
-        tag: '先攒攒电',
-        tone: 'slump',
-        delta: { energy: 5, relationships: -2, selfWorth: 0, avoidance: 5 },
+        delta: { ease: -2, boundary: -2 },
+        journal: '你忍了这一回。难受是真的，但也就难受半天——没人会因为一次格式问题记你一辈子。',
       },
       {
-        label: '坦白说状态差，改成散步',
-        description: '降低社交成本，也把自己从房间里捞出来一会儿。',
-        tag: '低配见面',
+        label: '会后私下找他沟通',
+        description: '单独说：当众批评让我很难做事。',
+        tag: '私下沟通',
         tone: 'bond',
-        delta: { energy: -1, health: 5, money: -20, relationships: 10, selfWorth: 6, avoidance: -5, opportunity: 3 },
-      },
-      {
-        label: '正常去吃一顿',
-        description: '热闹是真的，累也是真的——开心了就值。',
-        tag: '出门热闹',
-        tone: 'mixed',
-        delta: { energy: -6, health: -1, money: -160, relationships: 7, selfWorth: 3 },
+        delta: { boundary: 6, ease: 4 },
+        journal: '你私下提了。他没承认，但下次当众点你的次数少了——说出来，比憋着强。',
       },
     ],
   },
   {
-    id: 'course',
-    phase: '第 4 天',
-    title: '买了半年的课程还停在第一章',
-    body: '平台发来“学习提醒”。你清楚自己不是没能力，只是每次打开都觉得落下太多。',
-    thought: '一门没学完的课，不代表什么。它会一直在那儿等你，想学了随时能从第二章开始。',
+    id: 'ai-news',
+    phase: '第 3 天',
+    title: '看到「AI 已能起草合同」的新闻',
+    body: '同行群在转：某大所开始用 AI 批量起草标准合同。你心里「咯噔」一下：我这点活，是不是迟早被顶掉？',
+    thought: 'AI 能写标准合同，但客户的烂摊子、谈判桌上的人情世故，它接不住。被替代的恐慌，往往比真实的替代来得早得多。',
     choices: [
       {
-        label: '把提醒关掉',
-        description: '眼不见心不烦。课还在，哪天想学再打开就是了。',
-        tag: '关掉提醒',
+        label: '焦虑刷了一晚手机',
+        description: '越刷越慌，但什么也没做。',
+        tag: '刷到失眠',
         tone: 'slump',
-        delta: { energy: 3, career: -1, selfWorth: 0, avoidance: 5 },
+        delta: { ease: -4 },
+        journal: '你慌了一晚。第二天醒来，工作还在、客户还在——焦虑过去了，啥也没发生。',
       },
       {
-        label: '只学二十分钟',
-        description: '进度很小，但「重新开始」其实没那么难。',
-        tag: '二十分钟',
+        label: '花 20 分钟搜「律师怎么用 AI」',
+        description: '与其怕它，不如先摸一下它。',
+        tag: '先摸一下',
         tone: 'growth',
-        delta: { energy: -4, career: 6, selfWorth: 8, avoidance: -7, opportunity: 6 },
+        delta: { growth: 8, ease: 5 },
+        journal: '你随手搜了搜，发现门槛没想象中高。怕的东西，凑近看就没那么吓人了。',
       },
       {
-        label: '把课程卖给别人',
-        description: '换回点钱，也大方承认这条路暂时不适合自己。',
-        tag: '潇洒止损',
+        label: '该干嘛干嘛，先过好今天',
+        description: '一条新闻而已，不值得失眠。',
+        tag: '不当回事',
         tone: 'steady',
-        delta: { money: 420, selfWorth: 5, avoidance: -2 },
+        delta: { ease: 3, growth: -1 },
+        journal: '你没当回事。日子照过——不是每条贩卖焦虑的新闻都值得你失眠。',
       },
     ],
   },
   {
-    id: 'family',
-    phase: '第 5 晚',
-    title: '家里电话问你最近怎么样',
-    body: '你下意识想说都挺好。你也知道，一直“都挺好”有点累，但今晚未必有力气解释。',
-    thought: '报喜不报忧不是错，那是你在保护自己。哪天想说了，家其实一直都在。',
+    id: 'no-promotion',
+    phase: '第 6 周',
+    title: '老板暗示晋升无望',
+    body: '谈话里老板含糊地说「今年名额紧」。你听懂了：原地踏步，还得熬。',
+    thought: '晋升没了，天没塌。它只是提醒你：值得把劲，往别处使一点。',
     choices: [
       {
-        label: '报喜不报忧',
-        description: '今晚不想解释就别解释，没人规定一定要全摊开。',
-        tag: '都挺好',
+        label: '先躺平一阵',
+        description: '反正升不上去，那就少卷点。',
+        tag: '松口气',
         tone: 'slump',
-        delta: { energy: -1, relationships: -1, selfWorth: 0, avoidance: 4 },
+        delta: { ease: 6, boundary: 4, growth: -1 },
+        journal: '你松了油门。神奇的是，活照样干完，人却没那么累了——不卷，也没被开除。',
       },
       {
-        label: '讲一半真实情况',
-        description: '不全摊开，但让亲近的人知道一点，心里会松些。',
-        tag: '讲一半真话',
+        label: '开始看看外面的机会',
+        description: '上招聘网站，瞄一眼 legal-tech 的岗。',
+        tag: '看看外面',
+        tone: 'growth',
+        delta: { growth: 8, ease: 3 },
+        journal: '你随便看了看，发现真有公司要「懂法律的 AI 产品」的人。原来你这 5 年，不是白干。',
+      },
+      {
+        label: '找老板争取问清楚',
+        description: '问清到底差在哪。',
+        tag: '问个明白',
+        tone: 'steady',
+        delta: { boundary: 5, ease: 2 },
+        journal: '你问了。答案没让你满意，但你也不再瞎猜了——知道天花板在哪，反而踏实。',
+      },
+    ],
+  },
+  {
+    id: 'ordinary-day',
+    phase: '第 12 周',
+    title: '一个普通工作日，你发现没那么慌了',
+    body: '又是个普通的周三。老板的「紧急」还在，AI 的新闻还在，但你发现：自己好像没那么慌了。',
+    thought: '你担心的最坏——被骂、被顶替、升不上去——一个个来了，又一个个过去了，你都还好好的。',
+    choices: [
+      {
+        label: '列三件这周能做的小事',
+        description: '学一节课、划一次边界、投一份简历。',
+        tag: '小步开局',
+        tone: 'growth',
+        delta: { growth: 7, boundary: 4, ease: 6 },
+        journal: '你没翻身，只是把船头轻轻转了个向——这就够了。',
+      },
+      {
+        label: '继续这样，挺好',
+        description: '不急着改变，先稳着。',
+        tag: '先稳着',
+        tone: 'slump',
+        delta: { ease: 6, boundary: 2 },
+        journal: '你选择先稳着。稳着也是一种答案——你已经没那么怕了。',
+      },
+      {
+        label: '约朋友定个轻松的节点',
+        description: '让「想转型」落到一个具体的日子。',
+        tag: '定个节点',
         tone: 'bond',
-        delta: { energy: -3, relationships: 8, selfWorth: 7, avoidance: -5, opportunity: 2 },
-      },
-      {
-        label: '聊聊天气就好',
-        description: '气氛轻松也挺好，不是每通电话都得解决问题。',
-        tag: '随便聊聊',
-        tone: 'mixed',
-        delta: { energy: 2, relationships: 1, selfWorth: 0, avoidance: 3 },
-      },
-    ],
-  },
-  {
-    id: 'review',
-    phase: '第 6 天',
-    title: '绩效谈话提前了两周',
-    body: '主管让你准备这季度贡献。脑子先跳出一排没做完的事，然后才想起其实也有几件做成了。',
-    thought: '绩效再差也不过是这一档的事，天塌不下来。而且你做成的，比你记得的多。',
-    choices: [
-      {
-        label: '临场发挥',
-        description: '随便聊聊也能过去，结果通常没想象中糟。',
-        tag: '轻装上桌',
-        tone: 'mixed',
-        delta: { energy: -2, career: -2, selfWorth: -1, avoidance: 3 },
-      },
-      {
-        label: '整理三条证据',
-        description: '不用包装成精英，只把做过的事拿回来给自己看。',
-        tag: '拿回证据',
-        tone: 'growth',
-        delta: { energy: -6, career: 10, selfWorth: 9, avoidance: -6, opportunity: 8 },
-      },
-      {
-        label: '请半天假缓一缓',
-        description: '没状态就先歇半天，谈话改期也不是什么大事。',
-        tag: '缓一缓',
-        tone: 'slump',
-        delta: { energy: 6, health: 2, career: -2, selfWorth: 0, avoidance: 5 },
-      },
-    ],
-  },
-  {
-    id: 'body',
-    phase: '第 7 周',
-    title: '身体开始用疲惫发通知',
-    body: '肩颈、胃、睡眠都有点不对劲。它们不是突然坏掉的，只是想提醒你慢一点。',
-    thought: '身体发出的不是警报，是邀请你歇会儿。它很皮实，你善待它一点它就回来了。',
-    choices: [
-      {
-        label: '先躺平休息几天',
-        description: '什么都不干、好好睡——这正是身体现在最想要的。',
-        tag: '躺平回血',
-        tone: 'slump',
-        delta: { energy: 8, health: 6, career: -1, selfWorth: 1, avoidance: 5 },
-      },
-      {
-        label: '请半天假去检查',
-        description: '花点钱看一眼，多半没事，换回不少安心。',
-        tag: '检查一下',
-        tone: 'steady',
-        delta: { energy: 5, health: 9, money: -220, selfWorth: 6, avoidance: -3, opportunity: 2 },
-      },
-      {
-        label: '每天先走二十分钟',
-        description: '不宏大，但身体听得懂，也最容易坚持。',
-        tag: '出门走走',
-        tone: 'growth',
-        delta: { energy: 4, health: 8, selfWorth: 6, avoidance: -3, opportunity: 2 },
-      },
-    ],
-  },
-  {
-    id: 'side-project',
-    phase: '第 8 周',
-    title: '一个旧同学问你要不要一起做小项目',
-    body: '你一边心动，一边担心自己又三分钟热度。对方要的不是承诺改变世界，只是今晚先对一下方向。',
-    thought: '机会从来不止一班车。这次没接住也没关系，下一个还会来，你随时能上车。',
-    choices: [
-      {
-        label: '说最近想歇着，先放着',
-        description: '不勉强自己开新坑，也是一种清醒的选择。',
-        tag: '先不接',
-        tone: 'slump',
-        delta: { energy: 3, selfWorth: 1, avoidance: 5, opportunity: -3 },
-      },
-      {
-        label: '约三十分钟电话',
-        description: '不装很厉害，只是先聊聊能不能开始，零压力。',
-        tag: '先通电话',
-        tone: 'growth',
-        delta: { energy: -5, career: 7, relationships: 6, selfWorth: 8, avoidance: -6, opportunity: 10 },
-      },
-      {
-        label: '一口答应全包',
-        description: '热情上头，记得给自己留点回血的空间就好。',
-        tag: '一腔热血',
-        tone: 'mixed',
-        delta: { energy: -10, health: -3, career: 6, relationships: 2, selfWorth: 4, opportunity: 8 },
-      },
-    ],
-  },
-  {
-    id: 'loan',
-    phase: '第 9 周',
-    title: '一件想买的东西，正好在你最累时出现',
-    body: '它确实能让你开心一阵，也会让下个月账户紧一点。页面只差一次指纹确认。',
-    thought: '想要点东西犒劳自己，太正常了。买了也不会破产，缓缓再决定也完全没问题。',
-    choices: [
-      {
-        label: '直接买，先开心',
-        description: '偶尔哄哄自己没什么，这点钱不会动摇你的底盘。',
-        tag: '犒劳一下',
-        tone: 'slump',
-        delta: { energy: 5, money: -480, selfWorth: 2, avoidance: 4 },
-      },
-      {
-        label: '放入 72 小时清单',
-        description: '不禁止自己想要，只是让冲动先降降温。',
-        tag: '缓三天',
-        tone: 'steady',
-        delta: { energy: -1, money: 120, selfWorth: 7, avoidance: -4, opportunity: 2 },
-      },
-      {
-        label: '把钱转进房租账户',
-        description: '不浪漫，但让生活更稳，心里更踏实。',
-        tag: '保住底盘',
-        tone: 'growth',
-        delta: { energy: -3, money: 260, selfWorth: 7, avoidance: -4, opportunity: 2 },
-      },
-    ],
-  },
-  {
-    id: 'morning',
-    phase: '第 10 周',
-    title: '一个普通早晨，你发现也没什么大事发生',
-    body: '没有电影配乐，没有巨大转折。摆烂了这一阵，天没塌，你还好好的——日子原来这么禁得起折腾。',
-    thought: '回头看，你担心的那些最坏情况，几乎没一个真的发生。想动的时候，从一件小事开始就够了。',
-    choices: [
-      {
-        label: '列三件今天能完成的小事',
-        description: '不用翻身，只是先把身体轻轻转向出口。',
-        tag: '小事开局',
-        tone: 'growth',
-        delta: { energy: -2, career: 6, health: 3, selfWorth: 9, avoidance: -7, opportunity: 6 },
-      },
-      {
-        label: '再多歇一阵也行',
-        description: '休息够了自然会想动，不必逼自己赶哪个进度。',
-        tag: '继续歇着',
-        tone: 'slump',
-        delta: { energy: 4, health: 2, selfWorth: 1, avoidance: 5 },
-      },
-      {
-        label: '找人约一个轻松的节点',
-        description: '把“想动一动”从脑内搬到日程，有人陪着更轻松。',
-        tag: '约个节点',
-        tone: 'bond',
-        delta: { energy: -3, relationships: 8, career: 4, selfWorth: 8, avoidance: -6, opportunity: 6 },
+        delta: { growth: 5, boundary: 3, ease: 4 },
+        journal: '你把模糊的焦虑，换成了日历上一个具体的小约定。',
       },
     ],
   },
 ];
 
-// 反焦虑改版：摆烂关键词不再重罚，反而承认它的休息价值；其它规则保持温和正向。
+// 律师 Demo：自由输入关键词映射到 3 个工作维度，摆烂不重罚、转型/划边界给正反馈。
 const customRules = [
   {
-    label: '动一动',
+    label: '划边界',
     tone: 'growth',
-    words: ['学习', '写', '计划', '简历', '作品', '投递', '复盘', '开始', '整理', '行动'],
-    delta: { energy: -4, career: 6, selfWorth: 8, avoidance: -6, opportunity: 6 },
+    words: ['反击', '拒绝', '边界', '私下', '不熬夜', '明早', '商量', '回怼', '据理', '说清', '怼'],
+    delta: { boundary: 8, ease: 3 },
   },
   {
-    label: '找人靠一靠',
+    label: '学 AI / 转型',
+    tone: 'growth',
+    words: ['学', 'AI', 'ai', '课', '转型', '工具', '试试', '搜', '简历', '投递', 'legal', '产品', '转行'],
+    delta: { growth: 8, ease: 3 },
+  },
+  {
+    label: '找人聊聊',
     tone: 'bond',
-    words: ['朋友', '家人', '沟通', '聊聊', '求助', '坦白', '约', '一起', '告诉'],
-    delta: { energy: -2, relationships: 8, selfWorth: 6, avoidance: -5, opportunity: 3 },
+    words: ['朋友', '同事', '聊', '约', '请教', '问', '带我', '沟通', '同学'],
+    delta: { growth: 4, boundary: 3, ease: 3 },
   },
   {
-    label: '善待身体',
-    tone: 'steady',
-    words: ['睡', '休息', '运动', '散步', '跑步', '吃饭', '做饭', '医生', '医院', '检查'],
-    delta: { energy: 6, health: 8, selfWorth: 4, avoidance: -2, opportunity: 2 },
-  },
-  {
-    label: '歇一会儿',
+    label: '先歇着',
     tone: 'slump',
-    words: ['摆', '躺', '算了', '不想', '拖', '明天', '逃', '刷', '游戏', '随便'],
-    delta: { energy: 6, health: 2, selfWorth: 1, avoidance: 5 },
+    words: ['躺', '摆', '算了', '不想', '拖', '忍', '认了', '睡', '刷', '歇'],
+    delta: { ease: 6, boundary: 2 },
   },
   {
-    label: '花点钱',
-    tone: 'mixed',
-    words: ['辞职', '裸辞', '贷款', '借钱', '分期', '买', '花钱', '外卖'],
-    delta: { energy: 3, money: -260, selfWorth: 1, avoidance: 2 },
+    label: '先观望',
+    tone: 'steady',
+    words: ['观望', '再说', '看看', '慢慢', '以后', '存着', '半信', '了解'],
+    delta: { ease: 2, growth: 2 },
   },
 ];
 
@@ -544,22 +368,14 @@ function tuneInitialStats(baseStats, profile) {
   const text = profileText(profile);
   let delta = {};
 
-  if (hasAny(text, ['房租', '负债', '贷款', '分期', '月光', '没钱', '现金', '还款'])) {
-    delta = mergeDeltas(delta, { money: -680, energy: -4, avoidance: 5, opportunity: -3 });
+  if (hasAny(text, ['老板', '加班', '紧急', '骂', '训', '打扰', '卷', '熬夜'])) {
+    delta = mergeDeltas(delta, { boundary: -4, ease: -3 });
   }
-  if (hasAny(text, ['熬夜', '睡', '胃', '肩颈', '焦虑', '身体', '医院', '疼'])) {
-    delta = mergeDeltas(delta, { energy: -8, health: -7, selfWorth: -2 });
+  if (hasAny(text, ['AI', 'ai', '转型', '学', '工具', '转行', '机会', '课'])) {
+    delta = mergeDeltas(delta, { growth: 6, ease: 2 });
   }
-  if (hasAny(text, ['绩效', '早会', '项目', '简历', '转行', '作品', '找工作', '考研', '论文'])) {
-    delta = mergeDeltas(delta, { career: -4, opportunity: 7, selfWorth: -3 });
-  }
-  if (hasAny(profile.support, ['没有', '没人', '暂时没有', '一个人'])) {
-    delta = mergeDeltas(delta, { relationships: -8, avoidance: 4 });
-  } else {
-    delta = mergeDeltas(delta, { relationships: 7, selfWorth: 3 });
-  }
-  if (profile.goal) {
-    delta = mergeDeltas(delta, { opportunity: 6, selfWorth: 3 });
+  if (hasAny(text, ['焦虑', '慌', '怕', '替代', '失业', '没经验'])) {
+    delta = mergeDeltas(delta, { ease: -4 });
   }
 
   return applyDelta(baseStats, delta);
@@ -912,17 +728,17 @@ function statProgress(key, value) {
 }
 
 function getCurrentInertia(stats) {
-  if (stats.avoidance > 72 && stats.opportunity < 42) return '你在好好歇着——这没什么不对';
-  if (stats.selfWorth > 68 && stats.avoidance < 45) return '状态在慢慢回来，不急';
-  if (stats.relationships > 66 && stats.health > 62) return '有人和身体在稳稳托着你';
-  if (stats.money < 800) return '现金紧一点，但退路还有的是';
-  return '怎么走都行，路还很宽';
+  if (stats.growth > 60 && stats.ease > 55) return '转型的路，正一点点亮起来';
+  if (stats.boundary > 62) return '边界立住了，老板没那么能拿捏你了';
+  if (stats.ease > 62) return '心态稳住了——最坏也不过如此';
+  if (stats.growth < 30 && stats.ease < 40) return '还在原地纠结，但什么都来得及';
+  return '怎么走都行，律师这碗饭也饿不着你';
 }
 
 function deriveCustomMove(rawText) {
   const text = rawText.trim();
   const matched = [];
-  let delta = { selfWorth: 4, avoidance: -2 };
+  let delta = { ease: 3 };
   let tone = 'steady';
 
   customRules.forEach((rule) => {
@@ -952,50 +768,32 @@ function deriveCustomMove(rawText) {
 function buildForecast(stats, turnCount) {
   const raw = [
     {
-      id: 'slump',
-      label: '低配人生',
-      copy: '钱包瘦一点、节奏慢一点，但你饿不着、塌不了。',
-      color: '#b88a5a',
-      score:
-        stats.avoidance * 0.42 +
-        (100 - stats.selfWorth) * 0.2 +
-        (100 - stats.opportunity) * 0.2 +
-        Math.max(0, 2800 - stats.money) / 90,
+      id: 'stable',
+      label: '留在律所、划好边界',
+      copy: '继续当律师，但老板的「紧急」被你挡在边界外，稳稳的。',
+      color: '#2c8aa1',
+      score: stats.boundary * 0.5 + stats.ease * 0.25 + (100 - stats.growth) * 0.1,
     },
     {
       id: 'reboot',
-      label: '慢慢回血',
-      copy: '不是逆袭，只是行动感一点点回来。',
-      color: '#5f8f6b',
-      score:
-        (100 - stats.avoidance) * 0.26 +
-        stats.career * 0.2 +
-        stats.opportunity * 0.25 +
-        stats.selfWorth * 0.18 +
-        Math.min(turnCount * 2, 12),
+      label: '慢慢转型 AI',
+      copy: '不是裸辞，是把 AI 技能一点点攒起来，给自己多留一条路。',
+      color: '#327f68',
+      score: stats.growth * 0.55 + stats.ease * 0.2 + Math.min(turnCount * 2, 12),
     },
     {
-      id: 'stable',
-      label: '低欲稳定',
-      copy: '不追求爆发，先把生活托住。',
-      color: '#3d6fd8',
-      score:
-        stats.health * 0.2 +
-        stats.relationships * 0.22 +
-        Math.max(0, stats.money) / 95 +
-        (100 - Math.abs(stats.energy - 58)) * 0.16,
+      id: 'slump',
+      label: '低耗摆烂、照样过',
+      copy: '少卷一点，活照干完、人没那么累——也没被开除。',
+      color: '#b88a5a',
+      score: stats.ease * 0.45 + (100 - stats.growth) * 0.18 + (100 - stats.boundary) * 0.12,
     },
     {
       id: 'loop',
-      label: '反复横跳',
-      copy: '清醒几次，也躺平几次——路没锁死，随时能选。',
+      label: '继续纠结，但没事',
+      copy: '今天想转、明天想躺，反复横跳——这碗饭照样饿不着你。',
       color: '#b48a00',
-      score:
-        stats.energy * 0.16 +
-        stats.selfWorth * 0.17 +
-        stats.relationships * 0.14 +
-        (100 - Math.abs(stats.career - 50)) * 0.16 +
-        (stats.avoidance > 55 ? 14 : 4),
+      score: 30 + (100 - Math.abs(stats.growth - 50)) * 0.16 + (stats.ease < 50 ? 12 : 4),
     },
   ].map((item) => ({ ...item, score: Math.max(1, item.score) }));
 
@@ -1023,17 +821,17 @@ function buildEnding(stats, history, forecast) {
     .slice(0, 3);
 
   const titleMap = {
-    slump: '你没有失败，只是把日子过成了低配版——而它依然能过',
-    reboot: '你没有突然逆袭，但下一步已经重新长出来了',
-    stable: '你把野心调小了一点，也把日子托得更稳了',
-    loop: '你还在反复横跳，而这恰恰说明：什么都还来得及',
+    stable: '你没升职，但把边界立住了——老板的「紧急」，再也没那么能拿捏你',
+    reboot: '你没裸辞，但转型的门，已经被你推开了一条缝',
+    slump: '你少卷了，活照样干完、饭照样吃——原来摆烂也没塌',
+    loop: '你还在转与不转之间晃，而这恰恰说明：你哪条路都饿不着',
   };
 
   const summaryMap = {
-    slump: '摆烂的代价远没有想象中可怕：钱少花点、节奏慢一点，但你饿不着、塌不了，随时能重新开始。你担心的那些最坏结局，几乎一个都没发生。最坏，也不过如此。',
-    reboot: '你不需要靠热血翻盘。几个小动作就够把惯性松一松，剩下的交给时间——它一直站在你这边。',
-    stable: '先把自己活稳，也是一种了不起的选择。关系、身体、现金被托住之后，很多事自然就有了喘息的空间。',
-    loop: '会清醒也会躺平，太正常了。这一局最适合继续玩，因为它证明：你随时能换个方向，没有什么是定死的。',
+    stable: '你担心的最坏——被骂、被打扰、升不上去——一个个来了又过去，你都还好好的。划清边界后，你发现律所这碗饭，端得比想象中稳。',
+    reboot: '你没有靠一次裸辞赌命，只是用几个小动作把 AI 摸熟了。你这 5 年的经验不但没废，反而成了转型时别人想买的东西。',
+    slump: '你松了油门，结果天没塌：活照干、客户照在、工资照发。被 AI 取代的恐慌，比真实的替代早来了好几年——而那几年，你完全可以过得松一点。',
+    loop: '会想转、会想躺，太正常了。这一局最适合继续玩，因为它证明：无论 AI 怎么发展，你这个又懂法律、又开始懂 AI 的人，哪条路都走得通。',
   };
 
   return {
