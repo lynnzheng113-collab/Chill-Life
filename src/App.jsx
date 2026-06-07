@@ -986,8 +986,8 @@ function App() {
             <Sparkles size={18} aria-hidden="true" />
           </span>
           <div>
-            <h1>开摆之后 <span className="brand-badge">MVP</span></h1>
-            <p>最坏也不过如此 · 人生路径沙盘</p>
+            <h1>摆烂模拟器 <span className="brand-badge">MVP</span></h1>
+            <p>最坏也不过如此 · 律师职场版</p>
           </div>
         </div>
         <div className="topbar-actions">
@@ -1193,7 +1193,6 @@ function ProfileSetupPanel({
 }
 
 function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
-  const recent = history.slice(-4).reverse();
 
   return (
     <aside className="panel ledger-panel">
@@ -1221,19 +1220,6 @@ function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
         </div>
       )}
 
-      <div className="recent-log">
-        <h3>最近路径</h3>
-        {recent.length === 0 ? (
-          <p className="empty-note">还没有做出第一步。</p>
-        ) : (
-          recent.map((entry) => (
-            <div className={`log-row ${entry.tone}`} key={entry.id}>
-              <strong>{entry.decision}</strong>
-              <span>{entry.eventTitle}</span>
-            </div>
-          ))
-        )}
-      </div>
     </aside>
   );
 }
