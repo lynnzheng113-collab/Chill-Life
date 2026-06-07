@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const allowedTones = new Set(['slump', 'steady', 'growth', 'bond', 'mixed']);
+const DEEPSEEK_EVENT_TARGET = 4;
 const allowedStatKeys = new Set([
   'energy',
   'health',
@@ -39,7 +40,7 @@ function normalizeDeepSeekEvents(events) {
   if (!Array.isArray(events)) return [];
 
   return events
-    .slice(0, 6)
+    .slice(0, DEEPSEEK_EVENT_TARGET)
     .map((event, eventIndex) => {
       const choices = Array.isArray(event?.choices) ? event.choices : [];
       return {
@@ -86,17 +87,20 @@ function jsonResponse(res, statusCode, payload) {
 }
 
 function buildScenarioPrompt({ profile, persona, maxTurns }) {
+  const eventCount = Math.min(Number(maxTurns) || DEEPSEEK_EVENT_TARGET, DEEPSEEK_EVENT_TARGET);
+
   return [
     {
       role: 'system',
       content: [
         '你是一个中文交互式人生模拟器的剧情生成器。',
-        '你的任务是根据用户画像生成“摆烂人生模拟器”的前 4 到 6 幕人生事件。',
+        `你的任务是根据用户画像生成“摆烂人生模拟器”的前 ${eventCount} 幕人生事件。`,
         '不要输出建议文章，不要输出 Markdown，只输出严格 JSON。',
         '每个事件必须有 3 个选择：一个后撤/摆烂，一个稳住底盘，一个行动/关系修复。',
         'tone 只能是 slump、steady、growth、bond、mixed。',
         'delta 只能使用这些字段：energy, health, money, career, relationships, selfWorth, avoidance, opportunity。',
         '除 money 外，delta 的绝对值不要超过 18；money 的绝对值不要超过 1500。',
+        '文字要具体、短、像人生记录，不要解释产品功能。',
       ].join('\n'),
     },
     {
@@ -109,21 +113,22 @@ function buildScenarioPrompt({ profile, persona, maxTurns }) {
                 id: 'deepseek-1',
                 phase: '画像第 1 幕',
                 title: '短标题，来自用户真实压力',
-                body: '120 字以内，第二人称，具体生活场景',
+                body: '90 字以内，第二人称，具体生活场景',
                 thought: '60 字以内，点出人生惯性',
                 choices: [
                   {
                     label: '选择按钮文案',
-                    description: '短后果',
+                    description: '60 字以内的短后果',
                     tag: '路径节点短标签',
                     tone: 'slump|steady|growth|bond|mixed',
                     delta: { energy: -3, selfWorth: 4, avoidance: -5 },
-                    journal: '更长的人生节点记录，说明这一选择如何影响路径',
+                    journal: '100 字以内的人生节点记录，说明这一选择如何影响路径',
                   },
                 ],
               },
             ],
           },
+          eventCount,
           maxTurns,
           profile,
           persona: {
@@ -170,8 +175,8 @@ function deepseekScenarioPlugin(env) {
               response_format: { type: 'json_object' },
               thinking: { type: 'disabled' },
               stream: false,
-              temperature: 0.75,
-              max_tokens: 3200,
+              temperature: 0.68,
+              max_tokens: 1900,
             }),
           });
 

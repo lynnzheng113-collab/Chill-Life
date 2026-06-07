@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 
 const MAX_TURNS = 8;
+const DEEPSEEK_EVENT_TARGET = 4;
 
 const personas = [
   {
@@ -790,37 +791,44 @@ async function generateScenarioWithLocalCodex(profile, persona) {
   // output: Array<{ id, phase, title, body, thought, choices }>
   // each choice: { label, description, tag, tone, delta, journal }
   // Vite dev server keeps DEEPSEEK_API_KEY server-side in /api/deepseek-scenario.
-  try {
-    const response = await fetch('/api/deepseek-scenario', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile, persona, maxTurns: MAX_TURNS }),
-    });
+  const response = await fetch('/api/deepseek-scenario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      profile,
+      persona,
+      maxTurns: MAX_TURNS,
+      maxDeepSeekEvents: DEEPSEEK_EVENT_TARGET,
+    }),
+  });
 
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({}));
-      throw new Error(errorBody.error || `DeepSeek request failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    if (!Array.isArray(result.events) || result.events.length < 3) {
-      throw new Error('DeepSeek did not return enough valid events');
-    }
-
-    return {
-      source: 'DeepSeek',
-      note: `${result.model || 'deepseek'} 已生成 ${result.events.length} 幕画像剧情`,
-      events: completeScenario(result.events),
-    };
-  } catch (error) {
-    return {
-      source: '本地规则',
-      note: error.message.includes('DEEPSEEK_API_KEY')
-        ? '未配置 DeepSeek Key，已使用本地规则兜底'
-        : 'DeepSeek 暂不可用，已使用本地规则兜底',
-      events: generatePersonalizedScenario(profile, persona),
-    };
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => ({}));
+    throw new Error(errorBody.error || `DeepSeek request failed: ${response.status}`);
   }
+
+  const result = await response.json();
+  if (!Array.isArray(result.events) || result.events.length < 3) {
+    throw new Error('DeepSeek did not return enough valid events');
+  }
+
+  return {
+    source: 'DeepSeek',
+    note: `${result.model || 'deepseek'} 已生成前 ${result.events.length} 幕 AI 定制剧情`,
+    events: completeScenario(result.events),
+  };
+}
+
+function explainGenerationError(error) {
+  const message = String(error?.message || '');
+  if (message.includes('DEEPSEEK_API_KEY')) return 'DeepSeek Key 没配好，已保留本地预览路径。';
+  if (message.includes('returned too few') || message.includes('valid events')) {
+    return 'DeepSeek 返回格式不完整，已保留本地预览路径。';
+  }
+  if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+    return 'DeepSeek 网络请求暂时没通，已保留本地预览路径。';
+  }
+  return 'DeepSeek 暂时没成功，已保留本地预览路径。';
 }
 
 function applyDelta(stats, delta) {
@@ -1023,6 +1031,8 @@ function App() {
   const [pathNodes, setPathNodes] = useState(() => [createStartNode(personas[0])]);
   const [freeText, setFreeText] = useState('');
   const [showEnding, setShowEnding] = useState(false);
+  const generationRunRef = useRef(0);
+  const movesMadeRef = useRef(0);
 
   const currentEvent = currentEvents[Math.min(turnIndex, currentEvents.length - 1)];
   const movesMade = history.length;
@@ -1031,12 +1041,18 @@ function App() {
   const ending = useMemo(() => buildEnding(stats, history, forecast), [stats, history, forecast]);
 
   function restart(nextPersonaId = personaId, override = {}) {
+    if (!override.keepPendingGeneration) {
+      generationRunRef.current += 1;
+      setIsGeneratingPath(false);
+    }
+
     const nextPersona = personas.find((item) => item.id === nextPersonaId) ?? personas[0];
     const nextPersonalized = override.personalized ?? isPersonalized;
     const nextProfile = normalizeProfile(override.profile ?? activeProfile);
     const nextEvents =
       override.events ?? (nextPersonalized ? generatePersonalizedScenario(nextProfile, nextPersona) : scenarioEvents);
 
+    movesMadeRef.current = 0;
     setPersonaId(nextPersona.id);
     setActiveProfile(nextProfile);
     setCurrentEvents(nextEvents);
@@ -1051,21 +1067,49 @@ function App() {
     setGenerationNote(override.note ?? (nextPersonalized ? '已生成个人路径' : '使用预设剧情'));
   }
 
-  async function generateProfilePath() {
+  function generateProfilePath() {
     const nextProfile = normalizeProfile(draftProfile);
+    const runId = generationRunRef.current + 1;
+    const localEvents = generatePersonalizedScenario(nextProfile, persona);
+
+    generationRunRef.current = runId;
     setIsGeneratingPath(true);
-    try {
-      const result = await generateScenarioWithLocalCodex(nextProfile, persona);
-      restart(persona.id, {
-        events: result.events,
-        profile: nextProfile,
-        personalized: true,
-        source: result.source,
-        note: result.note,
+    restart(persona.id, {
+      events: localEvents,
+      profile: nextProfile,
+      personalized: true,
+      source: '本地预览',
+      note: '已先生成可玩的个人路径；DeepSeek 正在后台优化，回来后会自动替换。',
+      keepPendingGeneration: true,
+    });
+
+    generateScenarioWithLocalCodex(nextProfile, persona)
+      .then((result) => {
+        if (generationRunRef.current !== runId) return;
+
+        if (movesMadeRef.current === 0) {
+          restart(persona.id, {
+            events: result.events,
+            profile: nextProfile,
+            personalized: true,
+            source: 'DeepSeek 已完成',
+            note: `${result.note}，现在可以开始选择。`,
+            keepPendingGeneration: true,
+          });
+          return;
+        }
+
+        setGenerationSource('DeepSeek 已完成');
+        setGenerationNote(`${result.note}；你已经开始走当前路径，本轮不打断。再次生成可刷新成 AI 版本。`);
+      })
+      .catch((error) => {
+        if (generationRunRef.current !== runId) return;
+        setGenerationSource('本地预览');
+        setGenerationNote(explainGenerationError(error));
+      })
+      .finally(() => {
+        if (generationRunRef.current === runId) setIsGeneratingPath(false);
       });
-    } finally {
-      setIsGeneratingPath(false);
-    }
   }
 
   function applyMove(move, source = 'choice') {
@@ -1097,6 +1141,7 @@ function App() {
     const nextHistory = [...history, entry];
     const nextNodes = [...pathNodes, node];
 
+    movesMadeRef.current = nextHistory.length;
     setStats(nextStats);
     setHistory(nextHistory);
     setPathNodes(nextNodes);
@@ -1225,6 +1270,15 @@ function ProfileSetupPanel({
   onGenerate,
   onResetSample,
 }) {
+  const modelChipClass = [
+    'model-chip',
+    isGenerating ? 'loading' : '',
+    generationSource.includes('DeepSeek') ? 'deepseek' : '',
+    generationSource.includes('本地') ? 'local' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   function updateField(key, value) {
     onChange((current) => ({ ...current, [key]: value }));
   }
@@ -1239,7 +1293,7 @@ function ProfileSetupPanel({
           <h2>先写下你的人生底稿</h2>
           <p>{isPersonalized ? `${activeProfile.name || '你'}的路径已生效` : '默认样例已填好，可以直接生成'}</p>
         </div>
-        <span className="model-chip">{generationSource}</span>
+        <span className={modelChipClass}>{generationSource}</span>
       </div>
 
       <div className="profile-grid">
@@ -1289,7 +1343,7 @@ function ProfileSetupPanel({
         </button>
         <button className="primary-button" type="button" disabled={isGenerating} onClick={onGenerate}>
           <Sparkles size={18} aria-hidden="true" />
-          {isGenerating ? '生成中' : '生成我的路径'}
+          {isGenerating ? 'AI优化中' : isPersonalized ? '重新生成' : '生成我的路径'}
         </button>
       </div>
     </section>

@@ -38,7 +38,7 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 npm run dev
 ```
 
-页面点击「生成我的路径」时，会优先请求本地接口 `/api/deepseek-scenario`，由 Vite dev server 代理调用 DeepSeek。浏览器不会拿到 API Key。没有配置 Key 或接口失败时，会自动使用本地规则兜底。
+页面点击「生成我的路径」时，会先用本地规则秒出一条可玩的个人路径，同时在后台请求 `/api/deepseek-scenario`，由 Vite dev server 代理调用 DeepSeek。DeepSeek 成功后，如果用户还没开始选择，会自动替换成 AI 定制版；如果用户已经开始玩，本轮不会被打断。浏览器不会拿到 API Key。没有配置 Key 或接口失败时，会保留本地规则路径。
 
 ## 线上地址
 

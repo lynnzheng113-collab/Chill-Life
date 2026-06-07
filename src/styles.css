@@ -229,6 +229,24 @@ button:disabled {
   white-space: nowrap;
 }
 
+.model-chip.loading {
+  border-color: rgba(183, 122, 19, 0.38);
+  background: rgba(255, 247, 221, 0.92);
+  color: #6f4f0f;
+}
+
+.model-chip.deepseek {
+  border-color: rgba(50, 127, 104, 0.34);
+  background: rgba(222, 242, 233, 0.92);
+  color: #1f624e;
+}
+
+.model-chip.local {
+  border-color: rgba(61, 111, 216, 0.28);
+  background: rgba(232, 239, 255, 0.9);
+  color: #2f559a;
+}
+
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -303,6 +321,11 @@ button:disabled {
 
 .secondary-button.compact {
   width: auto;
+}
+
+.profile-actions .primary-button:disabled {
+  opacity: 0.82;
+  background: #4e625a;
 }
 
 .persona-option {
