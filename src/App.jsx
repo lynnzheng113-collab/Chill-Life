@@ -1077,6 +1077,7 @@ function App() {
   const [cohort, setCohort] = useState(null);
   const [cohortLoading, setCohortLoading] = useState(false);
   const [cohortError, setCohortError] = useState('');
+  const [isProfileExpanded, setIsProfileExpanded] = useState(true);
   const generationRunRef = useRef(0);
   const cohortRunRef = useRef(0);
   const movesMadeRef = useRef(0);
@@ -1148,6 +1149,7 @@ function App() {
     setIsPersonalized(nextPersonalized);
     setGenerationSource(override.source ?? (nextPersonalized ? '本地规则' : '预设剧情'));
     setGenerationNote(override.note ?? (nextPersonalized ? '已生成个人路径' : '使用预设剧情'));
+    setIsProfileExpanded(override.profileExpanded ?? !nextPersonalized);
   }
 
   function generateProfilePath() {
@@ -1164,6 +1166,7 @@ function App() {
       source: '本地预览',
       note: '已先生成可玩的个人路径；DeepSeek 正在后台优化，回来后会自动替换。',
       keepPendingGeneration: true,
+      profileExpanded: false,
     });
 
     generateScenarioWithLocalCodex(nextProfile, persona)
@@ -1178,6 +1181,7 @@ function App() {
             source: 'DeepSeek 已完成',
             note: `${result.note}，现在可以开始选择。`,
             keepPendingGeneration: true,
+            profileExpanded: false,
           });
           return;
         }
@@ -1250,8 +1254,8 @@ function App() {
             <Sparkles size={18} aria-hidden="true" />
           </span>
           <div>
-            <h1>开摆之后</h1>
-            <p>最坏也不过如此 · 一个让你松口气的人生模拟器</p>
+            <h1>开摆之后 <span className="brand-badge">MVP</span></h1>
+            <p>最坏也不过如此 · 人生路径沙盘</p>
           </div>
         </div>
         <div className="topbar-actions">
@@ -1287,9 +1291,14 @@ function App() {
         isGenerating={isGeneratingPath}
         generationSource={generationSource}
         generationNote={generationNote}
+        isExpanded={isProfileExpanded}
         onChange={setDraftProfile}
         onGenerate={generateProfilePath}
-        onResetSample={() => setDraftProfile(defaultProfile)}
+        onToggleExpanded={() => setIsProfileExpanded((current) => !current)}
+        onResetSample={() => {
+          setDraftProfile(defaultProfile);
+          setIsProfileExpanded(true);
+        }}
       />
 
       <section className="persona-strip" aria-label="人设选择">
@@ -1359,8 +1368,10 @@ function ProfileSetupPanel({
   isGenerating,
   generationSource,
   generationNote,
+  isExpanded,
   onChange,
   onGenerate,
+  onToggleExpanded,
   onResetSample,
 }) {
   const modelChipClass = [
@@ -1377,7 +1388,7 @@ function ProfileSetupPanel({
   }
 
   return (
-    <section className="panel profile-panel" aria-label="人生画像输入">
+    <section className={isPersonalized ? 'panel profile-panel personalized' : 'panel profile-panel'} aria-label="人生画像输入">
       <div className="panel-heading profile-heading">
         <span className="heading-icon">
           <MessageCircle size={18} aria-hidden="true" />
@@ -1389,47 +1400,61 @@ function ProfileSetupPanel({
         <span className={modelChipClass}>{generationSource}</span>
       </div>
 
-      <div className="profile-grid">
-        <label className="profile-field compact-field">
-          <span>名字</span>
-          <input
-            value={profile.name}
-            onChange={(event) => updateField('name', event.target.value)}
-            placeholder="小林"
-          />
-        </label>
-        <label className="profile-field compact-field">
-          <span>年龄</span>
-          <input
-            value={profile.age}
-            onChange={(event) => updateField('age', event.target.value)}
-            placeholder="24"
-          />
-        </label>
-        <label className="profile-field compact-field">
-          <span>城市</span>
-          <input
-            value={profile.city}
-            onChange={(event) => updateField('city', event.target.value)}
-            placeholder="杭州"
-          />
-        </label>
-
-        {profileFields.map((field) => (
-          <label className="profile-field" key={field.key}>
-            <span>{field.label}</span>
-            <textarea
-              value={profile[field.key]}
-              onChange={(event) => updateField(field.key, event.target.value)}
-              placeholder={field.placeholder}
-              rows={2}
+      {isPersonalized && !isExpanded ? (
+        <div className="profile-brief">
+          <span>{activeProfile.name || '你'} · {activeProfile.age || '未知年龄'} · {activeProfile.city || '未知城市'}</span>
+          <strong>{compactText(activeProfile.goal, 54)}</strong>
+          <p>{compactText(activeProfile.currentPressure, 78)}</p>
+        </div>
+      ) : (
+        <div className="profile-grid">
+          <label className="profile-field compact-field">
+            <span>名字</span>
+            <input
+              value={profile.name}
+              onChange={(event) => updateField('name', event.target.value)}
+              placeholder="小林"
             />
           </label>
-        ))}
-      </div>
+          <label className="profile-field compact-field">
+            <span>年龄</span>
+            <input
+              value={profile.age}
+              onChange={(event) => updateField('age', event.target.value)}
+              placeholder="24"
+            />
+          </label>
+          <label className="profile-field compact-field">
+            <span>城市</span>
+            <input
+              value={profile.city}
+              onChange={(event) => updateField('city', event.target.value)}
+              placeholder="杭州"
+            />
+          </label>
+
+          {profileFields.map((field) => (
+            <label className="profile-field" key={field.key}>
+              <span>{field.label}</span>
+              <textarea
+                value={profile[field.key]}
+                onChange={(event) => updateField(field.key, event.target.value)}
+                placeholder={field.placeholder}
+                rows={2}
+              />
+            </label>
+          ))}
+        </div>
+      )}
 
       <div className="profile-actions">
         <p className="generation-note">{generationNote}</p>
+        {isPersonalized && (
+          <button className="secondary-button compact" type="button" onClick={onToggleExpanded}>
+            <MessageCircle size={17} aria-hidden="true" />
+            {isExpanded ? '收起底稿' : '编辑底稿'}
+          </button>
+        )}
         <button className="secondary-button compact" type="button" onClick={onResetSample}>
           <RotateCcw size={17} aria-hidden="true" />
           恢复样例
