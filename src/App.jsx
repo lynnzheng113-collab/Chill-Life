@@ -23,6 +23,25 @@ import {
 const MAX_TURNS = 8;
 const DEEPSEEK_EVENT_TARGET = 4;
 const DEEPSEEK_API_ENDPOINT = import.meta.env.VITE_DEEPSEEK_API_URL || '/api/deepseek-scenario';
+const DEEPSEEK_COHORT_ENDPOINT = import.meta.env.VITE_DEEPSEEK_COHORT_URL || '/api/deepseek-cohort';
+
+// 「同路人 · 真实预测」：把当前人生节点发给 DeepSeek，匹配几个走了不同路的相似经历者，
+// 看他们后来怎么样了——给出反焦虑的真实预测。失败时静默降级（不影响主流程）。
+async function fetchCohort({ profile, persona, stats, path, leading }) {
+  const response = await fetch(DEEPSEEK_COHORT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile, persona, stats, path, leading }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `同路人生成失败：${response.status}`);
+  }
+  if (!Array.isArray(data?.cohort) || data.cohort.length < 2) {
+    throw new Error('同路人数据不完整');
+  }
+  return data;
+}
 
 const personas = [
   {
@@ -1055,7 +1074,11 @@ function App() {
   const [pathNodes, setPathNodes] = useState(() => [createStartNode(personas[0])]);
   const [freeText, setFreeText] = useState('');
   const [showEnding, setShowEnding] = useState(false);
+  const [cohort, setCohort] = useState(null);
+  const [cohortLoading, setCohortLoading] = useState(false);
+  const [cohortError, setCohortError] = useState('');
   const generationRunRef = useRef(0);
+  const cohortRunRef = useRef(0);
   const movesMadeRef = useRef(0);
 
   const currentEvent = currentEvents[Math.min(turnIndex, currentEvents.length - 1)];
@@ -1063,6 +1086,30 @@ function App() {
   const isFinished = showEnding || movesMade >= MAX_TURNS;
   const forecast = useMemo(() => buildForecast(stats, movesMade), [stats, movesMade]);
   const ending = useMemo(() => buildEnding(stats, history, forecast), [stats, history, forecast]);
+
+  async function loadCohort() {
+    if (cohortLoading) return;
+    const runId = cohortRunRef.current + 1;
+    cohortRunRef.current = runId;
+    setCohortLoading(true);
+    setCohortError('');
+    try {
+      const data = await fetchCohort({
+        profile: activeProfile,
+        persona,
+        stats,
+        path: history.map((entry) => ({ decision: entry.decision, tag: entry.eventTitle })),
+        leading: forecast[0]?.label,
+      });
+      if (cohortRunRef.current !== runId) return;
+      setCohort(data);
+    } catch (error) {
+      if (cohortRunRef.current !== runId) return;
+      setCohortError(explainGenerationError(error));
+    } finally {
+      if (cohortRunRef.current === runId) setCohortLoading(false);
+    }
+  }
 
   function restart(nextPersonaId = personaId, override = {}) {
     if (!override.keepPendingGeneration) {
@@ -1086,6 +1133,10 @@ function App() {
     setPathNodes([createStartNode(nextPersona, nextProfile, nextPersonalized)]);
     setFreeText('');
     setShowEnding(false);
+    cohortRunRef.current += 1;
+    setCohort(null);
+    setCohortLoading(false);
+    setCohortError('');
     setIsPersonalized(nextPersonalized);
     setGenerationSource(override.source ?? (nextPersonalized ? '本地规则' : '预设剧情'));
     setGenerationNote(override.note ?? (nextPersonalized ? '已生成个人路径' : '使用预设剧情'));
@@ -1279,6 +1330,14 @@ function App() {
       ) : (
         <ForecastPanel forecast={forecast} inertia={getCurrentInertia(stats)} />
       )}
+
+      <CohortPanel
+        cohort={cohort}
+        loading={cohortLoading}
+        error={cohortError}
+        onLoad={loadCohort}
+        movesMade={movesMade}
+      />
     </main>
   );
 }
@@ -1659,6 +1718,67 @@ function ForecastPanel({ forecast, inertia }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function CohortPanel({ cohort, loading, error, onLoad, movesMade }) {
+  return (
+    <section className="panel cohort-panel">
+      <div className="panel-heading">
+        <span className="heading-icon">
+          <Users size={18} aria-hidden="true" />
+        </span>
+        <div>
+          <h2>同路人 · 真实预测</h2>
+          <p>走到这一步的人，后来都怎么样了</p>
+        </div>
+      </div>
+
+      {!cohort && !loading && (
+        <div className="cohort-cta">
+          <p>
+            {movesMade === 0
+              ? '先走几步，我帮你找几个有相似经历、却走了不同路的人，看看他们后来过得怎样。'
+              : '找几个和你处境相似、却走了不同路的人，看看他们几年后过得怎样——多半没那么糟。'}
+          </p>
+          <button className="primary-button" type="button" onClick={onLoad}>
+            <Sparkles size={18} aria-hidden="true" />
+            看看同路人后来怎么样了
+          </button>
+          {error && <p className="cohort-error">{error}</p>}
+        </div>
+      )}
+
+      {loading && (
+        <div className="cohort-cta">
+          <p className="cohort-loading">正在翻找和你走过相似路的人…</p>
+        </div>
+      )}
+
+      {cohort && (
+        <>
+          <div className="cohort-list">
+            {cohort.cohort.map((person, index) => (
+              <div className="cohort-card" key={index}>
+                <strong>{person.who}</strong>
+                <span className="cohort-similar">当年 · {person.similar}</span>
+                <span className="cohort-now">后来 · {person.now}</span>
+              </div>
+            ))}
+          </div>
+          <div className="cohort-prediction">
+            <h3>给你的真实预测</h3>
+            <p>{cohort.prediction}</p>
+            {cohort.reassurance && <p className="cohort-reassure">🛟 {cohort.reassurance}</p>}
+          </div>
+          <button className="secondary-button" type="button" onClick={onLoad} disabled={loading}>
+            <RotateCcw size={16} aria-hidden="true" />
+            换一批同路人
+          </button>
+          {error && <p className="cohort-error">{error}</p>}
+        </>
+      )}
     </section>
   );
 }
