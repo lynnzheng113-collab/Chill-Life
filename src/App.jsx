@@ -1209,7 +1209,7 @@ function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
       <p className="persona-scene">{persona.scene}</p>
 
       <div className="solidarity-stat">
-        <strong>80%</strong> 的人，正和你有着同样的焦虑——你不是一个人。
+        已经有 <strong>4,300</strong> 人，正和你有着同样的焦虑——你不是一个人。
       </div>
 
       {isPersonalized && (
