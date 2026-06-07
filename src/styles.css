@@ -1294,6 +1294,24 @@ blockquote {
   }
 }
 
+/* 「你不是一个人」安抚条 */
+.solidarity-stat {
+  margin: 4px 0 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(127, 155, 106, 0.12);
+  border: 1px solid rgba(127, 155, 106, 0.3);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #3f6f47;
+}
+
+.solidarity-stat strong {
+  font-size: 1.25rem;
+  color: #2f7d4f;
+  margin-right: 2px;
+}
+
 /* 同路人 · 真实预测 面板 */
 .cohort-panel {
   margin-top: 18px;

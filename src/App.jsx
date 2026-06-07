@@ -1208,6 +1208,10 @@ function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
       </div>
       <p className="persona-scene">{persona.scene}</p>
 
+      <div className="solidarity-stat">
+        <strong>80%</strong> 的人，正和你有着同样的焦虑——你不是一个人。
+      </div>
+
       {isPersonalized && (
         <div className="profile-summary">
           <h3>画像摘要</h3>
@@ -1216,12 +1220,6 @@ function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
           <span>逃避：{compactText(profile.avoidancePattern, 34)}</span>
         </div>
       )}
-
-      <div className="stat-list">
-        {statMeta.map((meta) => (
-          <StatRow key={meta.key} meta={meta} value={stats[meta.key]} />
-        ))}
-      </div>
 
       <div className="recent-log">
         <h3>最近路径</h3>
@@ -1399,7 +1397,6 @@ function DecisionPanel({
               <strong>{choice.label}</strong>
               <small>{choice.description}</small>
             </span>
-            <ImpactPills delta={choice.delta} />
             <ArrowRight size={18} aria-hidden="true" />
           </button>
         ))}
@@ -1569,26 +1566,6 @@ function EndingReport({ ending, history, restart }) {
               </li>
             ))}
           </ol>
-        </div>
-
-        <div className="ending-block">
-          <h3>状态结算</h3>
-          <div className="settlement-row">
-            <span>最大收益</span>
-            <strong>
-              {ending.biggestGain ? `${getStatLabel(ending.biggestGain[0])} +${ending.biggestGain[1]}` : '没有明显收益'}
-            </strong>
-          </div>
-          <div className="settlement-row">
-            <span>最大代价</span>
-            <strong>
-              {ending.biggestCost ? `${getStatLabel(ending.biggestCost[0])} ${ending.biggestCost[1]}` : '没有明显代价'}
-            </strong>
-          </div>
-          <div className="settlement-row">
-            <span>主导结局</span>
-            <strong>{ending.leading.label} {ending.leading.percent}%</strong>
-          </div>
         </div>
 
         <div className="ending-block path-sentence">
