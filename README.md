@@ -48,7 +48,7 @@ npm run dev
 https://chill-life.pages.dev
 ```
 
-GitHub Pages：
+GitHub Pages（仓库管理员启用 Pages 后生效）：
 
 ```text
 https://lynnzheng113-collab.github.io/Chill-Life/
@@ -68,6 +68,8 @@ npx wrangler pages deploy dist --project-name chill-life --branch main
 ```
 
 GitHub Pages 会在推送到 `main` 后通过 GitHub Actions 自动部署。GitHub Pages 是静态站点，DeepSeek 请求会调用 Cloudflare Pages 上的 `/api/deepseek-scenario`。
+
+首次启用 GitHub Pages 需要仓库管理员打开 `Settings -> Pages`，把 `Build and deployment` 的 `Source` 设为 `GitHub Actions`，然后重新运行 `Deploy GitHub Pages` workflow。
 
 ## 常用命令
 
