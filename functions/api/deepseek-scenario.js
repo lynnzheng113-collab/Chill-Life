@@ -1,6 +1,3 @@
-import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
-
 const allowedTones = new Set(['slump', 'steady', 'growth', 'bond', 'mixed']);
 const allowedStatKeys = new Set([
   'energy',
@@ -64,25 +61,11 @@ function normalizeDeepSeekEvents(events) {
     .filter((event) => event.choices.length >= 2);
 }
 
-function readRequestBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk;
-      if (body.length > 80_000) {
-        reject(new Error('Request body too large'));
-        req.destroy();
-      }
-    });
-    req.on('end', () => resolve(body));
-    req.on('error', reject);
+function jsonResponse(status, payload) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
-}
-
-function jsonResponse(res, statusCode, payload) {
-  res.statusCode = statusCode;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(payload));
 }
 
 function buildScenarioPrompt({ profile, persona, maxTurns }) {
@@ -139,77 +122,64 @@ function buildScenarioPrompt({ profile, persona, maxTurns }) {
   ];
 }
 
-function deepseekScenarioPlugin(env) {
-  return {
-    name: 'chill-life-deepseek-scenario-api',
-    configureServer(server) {
-      server.middlewares.use('/api/deepseek-scenario', async (req, res) => {
-        if (req.method !== 'POST') {
-          jsonResponse(res, 405, { error: 'Method not allowed' });
-          return;
-        }
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const apiKey = env.DEEPSEEK_API_KEY;
 
-        const apiKey = env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY;
-        if (!apiKey) {
-          jsonResponse(res, 501, { error: 'DEEPSEEK_API_KEY is not configured' });
-          return;
-        }
+  if (!apiKey) {
+    return jsonResponse(501, { error: 'DEEPSEEK_API_KEY is not configured' });
+  }
 
-        try {
-          const body = JSON.parse(await readRequestBody(req));
-          const model = env.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
-          const upstream = await fetch('https://api.deepseek.com/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: buildScenarioPrompt(body),
-              response_format: { type: 'json_object' },
-              thinking: { type: 'disabled' },
-              stream: false,
-              temperature: 0.75,
-              max_tokens: 3200,
-            }),
-          });
+  try {
+    const body = await request.json();
+    const model = env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+    const upstream = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: buildScenarioPrompt(body),
+        response_format: { type: 'json_object' },
+        thinking: { type: 'disabled' },
+        stream: false,
+        temperature: 0.75,
+        max_tokens: 3200,
+      }),
+    });
 
-          const raw = await upstream.json();
-          if (!upstream.ok) {
-            jsonResponse(res, upstream.status, {
-              error: raw?.error?.message || raw?.message || 'DeepSeek request failed',
-            });
-            return;
-          }
-
-          const content = raw?.choices?.[0]?.message?.content;
-          const parsed = JSON.parse(content || '{}');
-          const events = normalizeDeepSeekEvents(parsed.events);
-          if (events.length < 3) {
-            jsonResponse(res, 502, { error: 'DeepSeek returned too few valid events' });
-            return;
-          }
-
-          jsonResponse(res, 200, {
-            source: 'deepseek',
-            model,
-            events,
-            usage: raw?.usage,
-          });
-        } catch (error) {
-          jsonResponse(res, 500, { error: error.message || 'DeepSeek scenario generation failed' });
-        }
+    const raw = await upstream.json();
+    if (!upstream.ok) {
+      return jsonResponse(upstream.status, {
+        error: raw?.error?.message || raw?.message || 'DeepSeek request failed',
       });
-    },
-  };
+    }
+
+    const content = raw?.choices?.[0]?.message?.content;
+    const parsed = JSON.parse(content || '{}');
+    const events = normalizeDeepSeekEvents(parsed.events);
+
+    if (events.length < 3) {
+      return jsonResponse(502, { error: 'DeepSeek returned too few valid events' });
+    }
+
+    return jsonResponse(200, {
+      source: 'deepseek',
+      model,
+      events,
+      usage: raw?.usage,
+    });
+  } catch (error) {
+    return jsonResponse(500, { error: error.message || 'DeepSeek scenario generation failed' });
+  }
 }
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+export function onRequest(context) {
+  if (context.request.method === 'OPTIONS') {
+    return new Response(null, { status: 204 });
+  }
 
-  return {
-    base: './',
-    plugins: [react(), deepseekScenarioPlugin(env)],
-  };
-});
+  return jsonResponse(405, { error: 'Method not allowed' });
+}

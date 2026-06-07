@@ -500,6 +500,46 @@ function compactText(text, maxLength = 28) {
   return clean.length > maxLength ? `${clean.slice(0, maxLength)}...` : clean;
 }
 
+function profileText(profile) {
+  return Object.values(profile).join('，');
+}
+
+function hasAny(text, words) {
+  return words.some((word) => text.includes(word));
+}
+
+function normalizeProfile(profile) {
+  const normalized = { ...defaultProfile, ...profile };
+  return Object.fromEntries(
+    Object.entries(normalized).map(([key, value]) => [key, String(value || '').trim()]),
+  );
+}
+
+function tuneInitialStats(baseStats, profile) {
+  const text = profileText(profile);
+  let delta = {};
+
+  if (hasAny(text, ['房租', '负债', '贷款', '分期', '月光', '没钱', '现金', '还款'])) {
+    delta = mergeDeltas(delta, { money: -680, energy: -4, avoidance: 5, opportunity: -3 });
+  }
+  if (hasAny(text, ['熬夜', '睡', '胃', '肩颈', '焦虑', '身体', '医院', '疼'])) {
+    delta = mergeDeltas(delta, { energy: -8, health: -7, selfWorth: -2 });
+  }
+  if (hasAny(text, ['绩效', '早会', '项目', '简历', '转行', '作品', '找工作', '考研', '论文'])) {
+    delta = mergeDeltas(delta, { career: -4, opportunity: 7, selfWorth: -3 });
+  }
+  if (hasAny(profile.support, ['没有', '没人', '暂时没有', '一个人'])) {
+    delta = mergeDeltas(delta, { relationships: -8, avoidance: 4 });
+  } else {
+    delta = mergeDeltas(delta, { relationships: 7, selfWorth: 3 });
+  }
+  if (profile.goal) {
+    delta = mergeDeltas(delta, { opportunity: 6, selfWorth: 3 });
+  }
+
+  return applyDelta(baseStats, delta);
+}
+
 function createStartNode(persona, profile = defaultProfile, personalized = false) {
   return {
     id: 'start',
@@ -513,6 +553,274 @@ function createStartNode(persona, profile = defaultProfile, personalized = false
       ? `你不是从空白人生开始，而是带着「${compactText(profile.goal, 34)}」和「${compactText(profile.avoidancePattern, 30)}」进入模拟。`
       : persona.scene,
   };
+}
+
+function createMove(label, description, tag, tone, delta, journal) {
+  return {
+    label,
+    description,
+    tag,
+    tone,
+    delta,
+    journal: journal || description,
+  };
+}
+
+function generatePersonalizedScenario(profile, persona) {
+  const p = normalizeProfile(profile);
+  const pressure = compactText(p.currentPressure, 32) || '最近那件一直压着你的事';
+  const goal = compactText(p.goal, 34) || '你想保住的一件事';
+  const avoidance = compactText(p.avoidancePattern, 30) || '最熟悉的逃避方式';
+  const support = compactText(p.support, 30) || '一个还能联系的人';
+  const money = compactText(p.moneyState, 30) || '现金和生活底盘';
+  const health = compactText(p.healthState, 30) || '身体发出的提醒';
+  const wish = compactText(p.hiddenWish, 34) || '那个没说出口的念头';
+
+  const generated = [
+    {
+      id: 'profile-pressure',
+      phase: '画像第 1 幕',
+      title: `${pressure} 又在今晚冒出来`,
+      body: `${p.name || '你'}本来想假装今天已经结束，但「${pressure}」没有下线。它像一个后台进程，连同「${goal}」一起占着脑子。`,
+      thought: `这一次模拟会从你的真实压力开始，而不是从一段通用剧情开始。`,
+      choices: [
+        createMove(
+          '继续把它压到明天',
+          '短期能少一点痛感，但问题会带着利息回来。',
+          '把压力延后',
+          'slump',
+          { energy: 4, career: -4, selfWorth: -7, avoidance: 10, opportunity: -6 },
+          `你把「${pressure}」放回明天，今晚轻了一点，明天的选择空间窄了一点。`,
+        ),
+        createMove(
+          '写下最小缺口',
+          '不解决全部，只把最吓人的部分拆成一句话。',
+          '拆出缺口',
+          'steady',
+          { energy: -4, career: 3, selfWorth: 8, avoidance: -8, opportunity: 5 },
+          `你没有立刻变好，但第一次把「${pressure}」从一团雾拆成可以处理的一小块。`,
+        ),
+        createMove(
+          '把压力讲给一个人听',
+          '先不求建议，只让现实世界知道你卡在哪里。',
+          '把话说出',
+          'bond',
+          { energy: -5, relationships: 8, selfWorth: 7, avoidance: -7, opportunity: 4 },
+          `你把「${pressure}」说出口，关系没有替你解决问题，但它让你不再一个人硬扛。`,
+        ),
+      ],
+    },
+    {
+      id: 'profile-avoidance',
+      phase: '画像第 2 幕',
+      title: `熟悉的逃避方式开始招手`,
+      body: `你知道自己又快滑进「${avoidance}」。它不一定坏，只是每次出现得太及时，刚好挡在真正重要的事前面。`,
+      thought: `摆烂不是静止，它是一条被重复练熟的路径。`,
+      choices: [
+        createMove(
+          '照旧滑进去',
+          '身体很熟练，脑子也暂时安静。',
+          '旧路重走',
+          'slump',
+          { energy: 5, health: -4, career: -6, selfWorth: -8, avoidance: 11, opportunity: -6 },
+          `你再次走向「${avoidance}」，舒服是真的，醒来后的钝痛也是真的。`,
+        ),
+        createMove(
+          '给它一个边界',
+          '允许自己休息，但设置一个能回来的出口。',
+          '给逃避设闹钟',
+          'steady',
+          { energy: 3, health: 2, selfWorth: 6, avoidance: -5, opportunity: 3 },
+          `你没有粗暴戒掉「${avoidance}」，只是给它加了一个出口，于是惯性第一次变短。`,
+        ),
+        createMove(
+          '先做五分钟目标相关的事',
+          '让行动小到无法继续争辩。',
+          '五分钟目标',
+          'growth',
+          { energy: -3, career: 7, selfWorth: 9, avoidance: -9, opportunity: 8 },
+          `你只为「${goal}」做了五分钟，但这五分钟把人生从自动播放里拽出来一点。`,
+        ),
+      ],
+    },
+    {
+      id: 'profile-support',
+      phase: '画像第 3 幕',
+      title: `关系网络里还有一个节点`,
+      body: `你的支撑不多，但「${support}」仍然在路径里。你可以继续消失，也可以用低成本的方式重新连上。`,
+      thought: `人不是靠意志力活着，人靠一些还没有断掉的连接活着。`,
+      choices: [
+        createMove(
+          '继续不回消息',
+          '不用解释，也少一次被接住的可能。',
+          '继续失联',
+          'slump',
+          { energy: 4, relationships: -11, selfWorth: -5, avoidance: 8, opportunity: -4 },
+          `你把「${support}」留在未读里，世界没有责怪你，只是安静地远了一点。`,
+        ),
+        createMove(
+          '发一句真实但很短的话',
+          '不求对方马上懂，只先恢复一条线。',
+          '短句求援',
+          'bond',
+          { energy: -3, relationships: 10, selfWorth: 7, avoidance: -7, opportunity: 4 },
+          `你给「${support}」发出一句短短的真话，关系重新成为路径上的支点。`,
+        ),
+        createMove(
+          '约一个低配见面',
+          '不吃大餐不长谈，只散步或喝水。',
+          '低配连接',
+          'bond',
+          { energy: -5, health: 4, money: -40, relationships: 12, selfWorth: 6, avoidance: -6 },
+          `你把见面降到足够轻，于是「${support}」不再是压力，而是一小段能走完的路。`,
+        ),
+      ],
+    },
+    {
+      id: 'profile-foundation',
+      phase: '画像第 4 幕',
+      title: `生活底盘发出两条提醒`,
+      body: `钱的状态是「${money}」，身体的状态是「${health}」。它们不浪漫，但会决定你还能不能继续选择。`,
+      thought: `底盘不稳的时候，很多理想会被迫变成噪音。`,
+      choices: [
+        createMove(
+          '先不管，继续硬撑',
+          '短期推进一点，长期把账记到身体和现金流上。',
+          '硬撑底盘',
+          'slump',
+          { energy: -7, health: -10, money: -260, career: 2, selfWorth: -5, avoidance: 6 },
+          `你继续硬撑，表面还在走，真正付费的是身体和现金流。`,
+        ),
+        createMove(
+          '做一次底盘整理',
+          '把账、睡眠、吃饭或检查先拎出来一项。',
+          '整理底盘',
+          'steady',
+          { energy: 4, health: 8, money: 160, selfWorth: 7, avoidance: -6, opportunity: 3 },
+          `你为「${money}」和「${health}」做了一次小整理，人生没有变亮，但不再继续漏水。`,
+        ),
+        createMove(
+          '删掉一个额外消耗',
+          '不是自律，是减少一个会把你拖回去的入口。',
+          '减少消耗',
+          'growth',
+          { energy: 5, health: 4, money: 240, selfWorth: 8, avoidance: -8, opportunity: 4 },
+          `你删掉一个额外消耗，省下来的不是钱或时间，而是下一次选择的余量。`,
+        ),
+      ],
+    },
+    {
+      id: 'profile-goal',
+      phase: '画像第 5 幕',
+      title: `${goal} 出现一个很小的窗口`,
+      body: `这个窗口并不宏大，也不会自动改变人生。它只是在问：你要不要把「${goal}」从愿望改成一个可交付的小动作？`,
+      thought: `机会窗口通常不是大门，它更像一个今天能完成的缝。`,
+      choices: [
+        createMove(
+          '等状态更好再开始',
+          '听起来合理，但状态经常由开始之后才产生。',
+          '等待状态',
+          'slump',
+          { energy: 2, career: -4, selfWorth: -6, avoidance: 8, opportunity: -8 },
+          `你继续等一个更适合「${goal}」的自己，窗口没有关死，只是变窄了。`,
+        ),
+        createMove(
+          '做一个可展示的小版本',
+          '不追求完整，先留下能被看见的证据。',
+          '做出小版本',
+          'growth',
+          { energy: -8, career: 12, selfWorth: 11, avoidance: -10, opportunity: 12 },
+          `你把「${goal}」做成一个小版本，人生第一次有了能摆在桌面上的证据。`,
+        ),
+        createMove(
+          '找人约一个检查点',
+          '把愿望搬到日程里，减少靠意志力硬扛。',
+          '约定检查点',
+          'bond',
+          { energy: -5, career: 5, relationships: 8, selfWorth: 8, avoidance: -9, opportunity: 8 },
+          `你为「${goal}」约了一个检查点，未来不再只是脑内承诺。`,
+        ),
+      ],
+    },
+    {
+      id: 'profile-hidden-wish',
+      phase: '画像第 6 幕',
+      title: `那个没说出口的念头浮上来`,
+      body: `你心里有一句话是：「${wish}」。它不是鸡汤，也不是借口，它可能正是这条路径最真实的燃料。`,
+      thought: `人会在被看见的时候恢复一点行动感。`,
+      choices: [
+        createMove(
+          '继续假装无所谓',
+          '少一点尴尬，也少一点真正被理解的机会。',
+          '继续伪装',
+          'mixed',
+          { energy: -2, relationships: -4, selfWorth: -6, avoidance: 6, opportunity: -3 },
+          `你把「${wish}」继续藏好，外面看起来没事，里面又多耗了一点电。`,
+        ),
+        createMove(
+          '把它写进备忘录',
+          '先不发给任何人，只承认它存在。',
+          '承认愿望',
+          'steady',
+          { energy: -2, selfWorth: 9, avoidance: -6, opportunity: 4 },
+          `你把「${wish}」写下来，它没有立刻变成答案，但变成了你能面对的东西。`,
+        ),
+        createMove(
+          '让一个可信的人看见',
+          '不是求拯救，是让真实的你进入关系。',
+          '被看见一次',
+          'bond',
+          { energy: -5, relationships: 10, selfWorth: 9, avoidance: -8, opportunity: 5 },
+          `你让一个人看见「${wish}」，这次不是表现正常，而是把真实带进了世界。`,
+        ),
+      ],
+    },
+  ];
+
+  return [...generated, ...scenarioEvents.slice(6)].slice(0, MAX_TURNS + 1);
+}
+
+function completeScenario(events) {
+  return [...events, ...scenarioEvents].slice(0, MAX_TURNS + 1);
+}
+
+async function generateScenarioWithLocalCodex(profile, persona) {
+  // DeepSeek adapter contract:
+  // input: { profile, persona, maxTurns: MAX_TURNS }
+  // output: Array<{ id, phase, title, body, thought, choices }>
+  // each choice: { label, description, tag, tone, delta, journal }
+  // Vite dev server keeps DEEPSEEK_API_KEY server-side in /api/deepseek-scenario.
+  try {
+    const response = await fetch('/api/deepseek-scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile, persona, maxTurns: MAX_TURNS }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({}));
+      throw new Error(errorBody.error || `DeepSeek request failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!Array.isArray(result.events) || result.events.length < 3) {
+      throw new Error('DeepSeek did not return enough valid events');
+    }
+
+    return {
+      source: 'DeepSeek',
+      note: `${result.model || 'deepseek'} 已生成 ${result.events.length} 幕画像剧情`,
+      events: completeScenario(result.events),
+    };
+  } catch (error) {
+    return {
+      source: '本地规则',
+      note: error.message.includes('DEEPSEEK_API_KEY')
+        ? '未配置 DeepSeek Key，已使用本地规则兜底'
+        : 'DeepSeek 暂不可用，已使用本地规则兜底',
+      events: generatePersonalizedScenario(profile, persona),
+    };
+  }
 }
 
 function applyDelta(stats, delta) {
@@ -586,6 +894,7 @@ function deriveCustomMove(rawText) {
     tag: matched[0] ?? '说出口',
     tone,
     delta: capDelta(delta),
+    journal: `你没有选择预设选项，而是把真实想法写成了这一句：「${compactText(text, 72)}」`,
   };
 }
 
@@ -701,6 +1010,13 @@ function App() {
     () => personas.find((item) => item.id === personaId) ?? personas[0],
     [personaId],
   );
+  const [draftProfile, setDraftProfile] = useState(defaultProfile);
+  const [activeProfile, setActiveProfile] = useState(defaultProfile);
+  const [isPersonalized, setIsPersonalized] = useState(false);
+  const [currentEvents, setCurrentEvents] = useState(scenarioEvents);
+  const [isGeneratingPath, setIsGeneratingPath] = useState(false);
+  const [generationSource, setGenerationSource] = useState('预设剧情');
+  const [generationNote, setGenerationNote] = useState('还没有生成个人路径');
   const [stats, setStats] = useState(() => ({ ...personas[0].stats }));
   const [turnIndex, setTurnIndex] = useState(0);
   const [history, setHistory] = useState([]);
@@ -708,21 +1024,48 @@ function App() {
   const [freeText, setFreeText] = useState('');
   const [showEnding, setShowEnding] = useState(false);
 
-  const currentEvent = scenarioEvents[Math.min(turnIndex, scenarioEvents.length - 1)];
+  const currentEvent = currentEvents[Math.min(turnIndex, currentEvents.length - 1)];
   const movesMade = history.length;
   const isFinished = showEnding || movesMade >= MAX_TURNS;
   const forecast = useMemo(() => buildForecast(stats, movesMade), [stats, movesMade]);
   const ending = useMemo(() => buildEnding(stats, history, forecast), [stats, history, forecast]);
 
-  function restart(nextPersonaId = personaId) {
+  function restart(nextPersonaId = personaId, override = {}) {
     const nextPersona = personas.find((item) => item.id === nextPersonaId) ?? personas[0];
+    const nextPersonalized = override.personalized ?? isPersonalized;
+    const nextProfile = normalizeProfile(override.profile ?? activeProfile);
+    const nextEvents =
+      override.events ?? (nextPersonalized ? generatePersonalizedScenario(nextProfile, nextPersona) : scenarioEvents);
+
     setPersonaId(nextPersona.id);
-    setStats({ ...nextPersona.stats });
+    setActiveProfile(nextProfile);
+    setCurrentEvents(nextEvents);
+    setStats(nextPersonalized ? tuneInitialStats(nextPersona.stats, nextProfile) : { ...nextPersona.stats });
     setTurnIndex(0);
     setHistory([]);
-    setPathNodes([createStartNode(nextPersona)]);
+    setPathNodes([createStartNode(nextPersona, nextProfile, nextPersonalized)]);
     setFreeText('');
     setShowEnding(false);
+    setIsPersonalized(nextPersonalized);
+    setGenerationSource(override.source ?? (nextPersonalized ? '本地规则' : '预设剧情'));
+    setGenerationNote(override.note ?? (nextPersonalized ? '已生成个人路径' : '使用预设剧情'));
+  }
+
+  async function generateProfilePath() {
+    const nextProfile = normalizeProfile(draftProfile);
+    setIsGeneratingPath(true);
+    try {
+      const result = await generateScenarioWithLocalCodex(nextProfile, persona);
+      restart(persona.id, {
+        events: result.events,
+        profile: nextProfile,
+        personalized: true,
+        source: result.source,
+        note: result.note,
+      });
+    } finally {
+      setIsGeneratingPath(false);
+    }
   }
 
   function applyMove(move, source = 'choice') {
@@ -737,13 +1080,18 @@ function App() {
       delta: move.delta,
       tone: move.tone,
       source,
+      journal: move.journal ?? move.description,
     };
     const node = {
       id: `node-${movesMade + 1}`,
       title: move.tag,
-      subtitle: currentEvent.phase,
+      subtitle: `第 ${movesMade + 1} 步 · ${currentEvent.phase}`,
       tone: move.tone,
       detail: move.description,
+      journal:
+        move.journal ??
+        `${compactText(currentEvent.title, 24)}：${compactText(move.description, 58)}`,
+      decision: move.label,
     };
 
     const nextHistory = [...history, entry];
@@ -752,7 +1100,7 @@ function App() {
     setStats(nextStats);
     setHistory(nextHistory);
     setPathNodes(nextNodes);
-    setTurnIndex((index) => Math.min(index + 1, scenarioEvents.length - 1));
+    setTurnIndex((index) => Math.min(index + 1, currentEvents.length - 1));
     setFreeText('');
 
     if (nextHistory.length >= MAX_TURNS) {
@@ -804,6 +1152,18 @@ function App() {
         </div>
       </header>
 
+      <ProfileSetupPanel
+        profile={draftProfile}
+        activeProfile={activeProfile}
+        isPersonalized={isPersonalized}
+        isGenerating={isGeneratingPath}
+        generationSource={generationSource}
+        generationNote={generationNote}
+        onChange={setDraftProfile}
+        onGenerate={generateProfilePath}
+        onResetSample={() => setDraftProfile(defaultProfile)}
+      />
+
       <section className="persona-strip" aria-label="人设选择">
         {personas.map((item) => (
           <button
@@ -819,7 +1179,13 @@ function App() {
       </section>
 
       <div className="workspace-grid">
-        <LedgerPanel stats={stats} persona={persona} history={history} />
+        <LedgerPanel
+          stats={stats}
+          persona={persona}
+          history={history}
+          profile={activeProfile}
+          isPersonalized={isPersonalized}
+        />
         <PathSandbox
           nodes={pathNodes}
           currentEvent={currentEvent}
@@ -848,7 +1214,89 @@ function App() {
   );
 }
 
-function LedgerPanel({ stats, persona, history }) {
+function ProfileSetupPanel({
+  profile,
+  activeProfile,
+  isPersonalized,
+  isGenerating,
+  generationSource,
+  generationNote,
+  onChange,
+  onGenerate,
+  onResetSample,
+}) {
+  function updateField(key, value) {
+    onChange((current) => ({ ...current, [key]: value }));
+  }
+
+  return (
+    <section className="panel profile-panel" aria-label="人生画像输入">
+      <div className="panel-heading profile-heading">
+        <span className="heading-icon">
+          <MessageCircle size={18} aria-hidden="true" />
+        </span>
+        <div>
+          <h2>先写下你的人生底稿</h2>
+          <p>{isPersonalized ? `${activeProfile.name || '你'}的路径已生效` : '默认样例已填好，可以直接生成'}</p>
+        </div>
+        <span className="model-chip">{generationSource}</span>
+      </div>
+
+      <div className="profile-grid">
+        <label className="profile-field compact-field">
+          <span>名字</span>
+          <input
+            value={profile.name}
+            onChange={(event) => updateField('name', event.target.value)}
+            placeholder="小林"
+          />
+        </label>
+        <label className="profile-field compact-field">
+          <span>年龄</span>
+          <input
+            value={profile.age}
+            onChange={(event) => updateField('age', event.target.value)}
+            placeholder="24"
+          />
+        </label>
+        <label className="profile-field compact-field">
+          <span>城市</span>
+          <input
+            value={profile.city}
+            onChange={(event) => updateField('city', event.target.value)}
+            placeholder="杭州"
+          />
+        </label>
+
+        {profileFields.map((field) => (
+          <label className="profile-field" key={field.key}>
+            <span>{field.label}</span>
+            <textarea
+              value={profile[field.key]}
+              onChange={(event) => updateField(field.key, event.target.value)}
+              placeholder={field.placeholder}
+              rows={2}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="profile-actions">
+        <p className="generation-note">{generationNote}</p>
+        <button className="secondary-button compact" type="button" onClick={onResetSample}>
+          <RotateCcw size={17} aria-hidden="true" />
+          恢复样例
+        </button>
+        <button className="primary-button" type="button" disabled={isGenerating} onClick={onGenerate}>
+          <Sparkles size={18} aria-hidden="true" />
+          {isGenerating ? '生成中' : '生成我的路径'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
   const recent = history.slice(-4).reverse();
 
   return (
@@ -863,6 +1311,15 @@ function LedgerPanel({ stats, persona, history }) {
         </div>
       </div>
       <p className="persona-scene">{persona.scene}</p>
+
+      {isPersonalized && (
+        <div className="profile-summary">
+          <h3>画像摘要</h3>
+          <p>{profile.name || '你'} · {profile.age || '未知年龄'} · {profile.city || '未知城市'}</p>
+          <span>目标：{compactText(profile.goal, 34)}</span>
+          <span>逃避：{compactText(profile.avoidancePattern, 34)}</span>
+        </div>
+      )}
 
       <div className="stat-list">
         {statMeta.map((meta) => (
@@ -958,12 +1415,16 @@ function PathSandbox({ nodes, currentEvent, movesMade, stats, isFinished }) {
             key={node.id}
             className={`path-node ${node.tone} ${node.index === positionedNodes.length - 1 ? 'current' : ''}`}
             type="button"
-            title={node.detail}
+            title={node.journal || node.detail}
             style={{ left: `${node.x}%`, top: `${node.y}%` }}
           >
             <span>{node.index === 0 ? '始' : node.index}</span>
-            <strong>{node.title}</strong>
-            <small>{node.subtitle}</small>
+            <div>
+              <strong>{node.title}</strong>
+              <small>{node.subtitle}</small>
+              {node.decision && <em>{compactText(node.decision, 22)}</em>}
+            </div>
+            <p>{node.journal || node.detail}</p>
           </button>
         ))}
 
@@ -978,7 +1439,11 @@ function PathSandbox({ nodes, currentEvent, movesMade, stats, isFinished }) {
       <div className="map-readout">
         <span>当前节点</span>
         <strong>{currentNode?.title ?? '起点'}</strong>
-        <em>{movesMade === 0 ? '第一步还没落下' : `已经留下 ${movesMade} 次选择痕迹`}</em>
+        <em>
+          {movesMade === 0
+            ? currentNode?.journal ?? '第一步还没落下'
+            : currentNode?.journal ?? `已经留下 ${movesMade} 次选择痕迹`}
+        </em>
       </div>
     </section>
   );
@@ -1142,7 +1607,7 @@ function EndingReport({ ending, history, restart }) {
             {ending.intenseTurns.map((entry) => (
               <li key={entry.id}>
                 <strong>{entry.decision}</strong>
-                <span>{entry.note}</span>
+                <span>{entry.journal ?? entry.note}</span>
               </li>
             ))}
           </ol>
