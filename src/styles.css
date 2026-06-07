@@ -1131,3 +1131,90 @@ blockquote {
     font-size: 1.25rem;
   }
 }
+
+/* 同路人 · 真实预测 面板 */
+.cohort-panel {
+  margin-top: 18px;
+}
+
+.cohort-cta p {
+  margin: 0 0 14px;
+  opacity: 0.85;
+  line-height: 1.6;
+}
+
+.cohort-loading {
+  font-style: italic;
+}
+
+.cohort-list {
+  display: grid;
+  gap: 12px;
+  margin: 6px 0 18px;
+}
+
+@media (min-width: 720px) {
+  .cohort-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.cohort-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 15px;
+  border-radius: 12px;
+  background: rgba(127, 155, 106, 0.1);
+  border: 1px solid rgba(127, 155, 106, 0.32);
+}
+
+.cohort-card strong {
+  font-size: 0.98rem;
+}
+
+.cohort-card .cohort-similar {
+  font-size: 0.84rem;
+  opacity: 0.65;
+  line-height: 1.55;
+}
+
+.cohort-card .cohort-now {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #3f6f47;
+}
+
+.cohort-prediction {
+  padding: 15px 16px;
+  border-radius: 12px;
+  background: rgba(201, 138, 90, 0.12);
+  border-left: 3px solid #c98a5a;
+}
+
+.cohort-prediction h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.cohort-prediction p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.cohort-prediction .cohort-reassure {
+  margin-top: 10px;
+  font-weight: 600;
+  color: #b06a3a;
+}
+
+.cohort-panel .secondary-button {
+  margin-top: 14px;
+}
+
+.cohort-error {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #c0392b;
+  opacity: 0.85;
+}

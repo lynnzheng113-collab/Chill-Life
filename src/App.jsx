@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -23,6 +23,25 @@ import {
 const MAX_TURNS = 8;
 const DEEPSEEK_EVENT_TARGET = 4;
 const DEEPSEEK_API_ENDPOINT = import.meta.env.VITE_DEEPSEEK_API_URL || '/api/deepseek-scenario';
+const DEEPSEEK_COHORT_ENDPOINT = import.meta.env.VITE_DEEPSEEK_COHORT_URL || '/api/deepseek-cohort';
+
+// 「同路人 · 真实预测」：把当前人生节点发给 DeepSeek，匹配几个走了不同路的相似经历者，
+// 看他们后来怎么样了——给出反焦虑的真实预测。失败时静默降级（不影响主流程）。
+async function fetchCohort({ profile, persona, stats, path, leading }) {
+  const response = await fetch(DEEPSEEK_COHORT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile, persona, stats, path, leading }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `同路人生成失败：${response.status}`);
+  }
+  if (!Array.isArray(data?.cohort) || data.cohort.length < 2) {
+    throw new Error('同路人数据不完整');
+  }
+  return data;
+}
 
 const personas = [
   {
@@ -75,15 +94,16 @@ const personas = [
   },
 ];
 
+// 反焦虑改版：数值语义全部正向化，不再有「越高越糟」的惩罚式指标。
 const statMeta = [
   { key: 'energy', label: '精力', icon: Battery, color: '#3d6fd8' },
   { key: 'health', label: '健康', icon: Heart, color: '#d95f4f' },
   { key: 'money', label: '现金', icon: Wallet, color: '#b77a13' },
-  { key: 'career', label: '职业信用', icon: Briefcase, color: '#327f68' },
-  { key: 'relationships', label: '关系余量', icon: Users, color: '#7b5ab6' },
-  { key: 'selfWorth', label: '自我尊重', icon: Shield, color: '#2c8aa1' },
-  { key: 'avoidance', label: '逃避惯性', icon: TrendingDown, color: '#c64b3b', inverted: true },
-  { key: 'opportunity', label: '机会窗口', icon: Sparkles, color: '#b48a00' },
+  { key: 'career', label: '做事手感', icon: Briefcase, color: '#327f68' },
+  { key: 'relationships', label: '关系', icon: Users, color: '#7b5ab6' },
+  { key: 'selfWorth', label: '自我接纳', icon: Shield, color: '#2c8aa1' },
+  { key: 'avoidance', label: '松弛度', icon: Heart, color: '#6f9b6a' },
+  { key: 'opportunity', label: '可能性', icon: Sparkles, color: '#b48a00' },
 ];
 
 const defaultProfile = {
@@ -143,34 +163,36 @@ const profileFields = [
   },
 ];
 
+// 反焦虑改版：摆烂选项不再重罚——大多是「歇一口气」，代价温和可逆；
+// thought 从「点出代价」改成「替你卸下内疚」。核心：最坏也不过如此。
 const scenarioEvents = [
   {
     id: 'rent',
     phase: '第 1 晚',
     title: '房租提醒在 23:48 弹出来',
-    body: '你本来只想刷十分钟，结果外卖盒还没扔，明早的会也没准备。手机屏幕上同时躺着房租、信用卡和未读工作群。',
-    thought: '如果今晚不处理，它不会消失，只会变成明天更钝的压力。',
+    body: '你本来只想刷十分钟，结果外卖盒还没扔，明早的会也没准备。手机屏幕上躺着房租提醒和几条没读的工作群消息。',
+    thought: '账单不会因为你今晚没看就翻倍。它会安安静静地等你，明天再处理也完全来得及。',
     choices: [
       {
         label: '继续刷，等困意盖过去',
-        description: '短暂不痛，明天醒来更乱。',
-        tag: '把账单按黑',
+        description: '今晚先放过自己，账单明天还在那儿，跑不掉也不会变大。',
+        tag: '今晚先歇',
         tone: 'slump',
-        delta: { energy: 5, health: -4, money: -180, career: -5, selfWorth: -8, avoidance: 10, opportunity: -4 },
+        delta: { energy: 6, health: 1, selfWorth: -1, avoidance: 5 },
       },
       {
         label: '只做十分钟账本',
-        description: '不解决人生，但先看清缺口。',
-        tag: '算清缺口',
+        description: '不解决人生，只是看一眼缺口——通常没你想的多。',
+        tag: '看一眼缺口',
         tone: 'steady',
-        delta: { energy: -4, money: 120, career: 3, selfWorth: 8, avoidance: -8, opportunity: 4 },
+        delta: { energy: -3, money: 120, career: 2, selfWorth: 6, avoidance: -4, opportunity: 3 },
       },
       {
         label: '找朋友借一点周转',
-        description: '开口很难，但压力不再只在你脑内打转。',
+        description: '开口有点难，但朋友大多比你想的更愿意搭把手。',
         tag: '求助一次',
         tone: 'bond',
-        delta: { energy: -3, money: 900, relationships: 7, selfWorth: 2, avoidance: -5, opportunity: 2 },
+        delta: { energy: -2, money: 900, relationships: 7, selfWorth: 3, avoidance: -3, opportunity: 2 },
       },
     ],
   },
@@ -178,29 +200,29 @@ const scenarioEvents = [
     id: 'meeting',
     phase: '第 2 天',
     title: '早会轮到你同步进度',
-    body: '项目其实卡住三天了。你可以继续说快好了，也可以承认卡点，或者把责任甩给还没回复的人。',
-    thought: '职业信用不是一次爆发建立的，它更像每次不逃跑时留下的痕迹。',
+    body: '项目其实卡住三天了。你可以继续说快好了，也可以承认卡点，或者把它先放一放。',
+    thought: '一次说得不漂亮，没人会因此记你一辈子。做事手感掉了还能补，谁都有卡住的时候。',
     choices: [
       {
         label: '说快好了，先过关',
-        description: '会议顺利过去，代价留给下午的你。',
-        tag: '假装顺利',
+        description: '会议平稳过去。这点小拖延，没人会真的揪着不放。',
+        tag: '先稳住',
         tone: 'slump',
-        delta: { energy: -3, career: -8, selfWorth: -7, avoidance: 9, opportunity: -5 },
+        delta: { energy: -1, career: -2, selfWorth: -1, avoidance: 5 },
       },
       {
         label: '说清卡点和下一步',
-        description: '没有显得完美，但别人终于能帮上忙。',
-        tag: '暴露卡点',
+        description: '不用显得完美，说出来别人反而能搭把手。',
+        tag: '说出卡点',
         tone: 'growth',
-        delta: { energy: -6, career: 10, relationships: 4, selfWorth: 7, avoidance: -8, opportunity: 7 },
+        delta: { energy: -5, career: 8, relationships: 4, selfWorth: 7, avoidance: -6, opportunity: 6 },
       },
       {
-        label: '甩给等待反馈',
-        description: '短期安全，长期别人会开始绕开你。',
-        tag: '转移视线',
+        label: '先把它放一放',
+        description: '今天没力气就先搁着，卡点不会因为你不提就恶化。',
+        tag: '暂时搁置',
         tone: 'slump',
-        delta: { career: -10, relationships: -7, selfWorth: -5, avoidance: 6, opportunity: -6 },
+        delta: { energy: 3, career: -2, selfWorth: -1, avoidance: 5 },
       },
     ],
   },
@@ -209,28 +231,28 @@ const scenarioEvents = [
     phase: '第 3 晚',
     title: '朋友约你吃饭，说你最近像消失了',
     body: '你知道见面会好一点，但也知道出门、花钱、解释近况都很累。聊天框停在“今晚有空吗”。',
-    thought: '摆烂最隐蔽的成本，是把能托住你的关系一点点推远。',
+    thought: '真朋友不会因为你消失一阵就走掉。等你有力气了再回，关系还在那儿。',
     choices: [
       {
-        label: '已读不回',
-        description: '不用解释，关系也少了一点温度。',
-        tag: '继续隐身',
+        label: '今晚先不回，攒攒电',
+        description: '一个人待着也没什么不对。等想见了再约，来得及。',
+        tag: '先攒攒电',
         tone: 'slump',
-        delta: { energy: 4, relationships: -10, selfWorth: -5, avoidance: 8, opportunity: -3 },
+        delta: { energy: 5, relationships: -2, selfWorth: 0, avoidance: 5 },
       },
       {
         label: '坦白说状态差，改成散步',
-        description: '降低社交成本，同时把自己从房间里捞出来。',
+        description: '降低社交成本，也把自己从房间里捞出来一会儿。',
         tag: '低配见面',
         tone: 'bond',
-        delta: { energy: -2, health: 5, money: -35, relationships: 10, selfWorth: 6, avoidance: -7, opportunity: 3 },
+        delta: { energy: -1, health: 5, money: -20, relationships: 10, selfWorth: 6, avoidance: -5, opportunity: 3 },
       },
       {
-        label: '硬撑正常去大吃一顿',
-        description: '热闹是真的，透支也是真的。',
-        tag: '热闹过量',
+        label: '正常去吃一顿',
+        description: '热闹是真的，累也是真的——开心了就值。',
+        tag: '出门热闹',
         tone: 'mixed',
-        delta: { energy: -9, health: -3, money: -260, relationships: 7, selfWorth: 2, avoidance: -2 },
+        delta: { energy: -6, health: -1, money: -160, relationships: 7, selfWorth: 3 },
       },
     ],
   },
@@ -238,29 +260,29 @@ const scenarioEvents = [
     id: 'course',
     phase: '第 4 天',
     title: '买了半年的课程还停在第一章',
-    body: '平台发来“学习提醒”。你清楚自己不是没能力，而是每次打开都被落后的羞耻感劝退。',
-    thought: '从补完整个过去开始很重，从重启二十分钟开始刚好。',
+    body: '平台发来“学习提醒”。你清楚自己不是没能力，只是每次打开都觉得落下太多。',
+    thought: '一门没学完的课，不代表什么。它会一直在那儿等你，想学了随时能从第二章开始。',
     choices: [
       {
         label: '把提醒关掉',
-        description: '清净一些，也少一个重新开始的入口。',
-        tag: '关闭提醒',
+        description: '眼不见心不烦。课还在，哪天想学再打开就是了。',
+        tag: '关掉提醒',
         tone: 'slump',
-        delta: { energy: 3, career: -4, selfWorth: -8, avoidance: 9, opportunity: -7 },
+        delta: { energy: 3, career: -1, selfWorth: 0, avoidance: 5 },
       },
       {
         label: '只学二十分钟',
-        description: '进度很小，但惯性被打断了一次。',
+        description: '进度很小，但「重新开始」其实没那么难。',
         tag: '二十分钟',
         tone: 'growth',
-        delta: { energy: -5, career: 7, selfWorth: 9, avoidance: -9, opportunity: 8 },
+        delta: { energy: -4, career: 6, selfWorth: 8, avoidance: -7, opportunity: 6 },
       },
       {
         label: '把课程卖给别人',
-        description: '止损很现实，但也承认这条路暂时不是你要走的。',
-        tag: '现实止损',
+        description: '换回点钱，也大方承认这条路暂时不适合自己。',
+        tag: '潇洒止损',
         tone: 'steady',
-        delta: { money: 420, career: -2, selfWorth: 4, avoidance: -3, opportunity: -2 },
+        delta: { money: 420, selfWorth: 5, avoidance: -2 },
       },
     ],
   },
@@ -268,29 +290,29 @@ const scenarioEvents = [
     id: 'family',
     phase: '第 5 晚',
     title: '家里电话问你最近怎么样',
-    body: '你下意识想说都挺好。可你也知道，一直“都挺好”的代价，是没人知道你已经快撑不住了。',
-    thought: '不是所有求助都会被理解，但所有长期伪装都会耗电。',
+    body: '你下意识想说都挺好。你也知道，一直“都挺好”有点累，但今晚未必有力气解释。',
+    thought: '报喜不报忧不是错，那是你在保护自己。哪天想说了，家其实一直都在。',
     choices: [
       {
         label: '报喜不报忧',
-        description: '少一次解释，多一点孤立感。',
+        description: '今晚不想解释就别解释，没人规定一定要全摊开。',
         tag: '都挺好',
         tone: 'slump',
-        delta: { energy: -3, relationships: -5, selfWorth: -6, avoidance: 6 },
+        delta: { energy: -1, relationships: -1, selfWorth: 0, avoidance: 4 },
       },
       {
         label: '讲一半真实情况',
-        description: '不把自己全摊开，但让亲近的人知道一点。',
+        description: '不全摊开，但让亲近的人知道一点，心里会松些。',
         tag: '讲一半真话',
         tone: 'bond',
-        delta: { energy: -4, relationships: 8, selfWorth: 7, avoidance: -6, opportunity: 2 },
+        delta: { energy: -3, relationships: 8, selfWorth: 7, avoidance: -5, opportunity: 2 },
       },
       {
-        label: '转移话题到天气',
-        description: '气氛安全，问题原样留在原地。',
-        tag: '转去天气',
+        label: '聊聊天气就好',
+        description: '气氛轻松也挺好，不是每通电话都得解决问题。',
+        tag: '随便聊聊',
         tone: 'mixed',
-        delta: { energy: 2, relationships: -2, selfWorth: -3, avoidance: 5 },
+        delta: { energy: 2, relationships: 1, selfWorth: 0, avoidance: 3 },
       },
     ],
   },
@@ -298,59 +320,59 @@ const scenarioEvents = [
     id: 'review',
     phase: '第 6 天',
     title: '绩效谈话提前了两周',
-    body: '主管让你准备这季度贡献。你的脑子先跳出一排没做完的事，然后才想起其实也有几件救过场。',
-    thought: '摆烂的人也会做成事，只是常常没有把证据留给未来的自己。',
+    body: '主管让你准备这季度贡献。脑子先跳出一排没做完的事，然后才想起其实也有几件做成了。',
+    thought: '绩效再差也不过是这一档的事，天塌不下来。而且你做成的，比你记得的多。',
     choices: [
       {
         label: '临场发挥',
-        description: '你可能说得过去，也可能把自己说没了。',
-        tag: '空手上桌',
+        description: '随便聊聊也能过去，结果通常没想象中糟。',
+        tag: '轻装上桌',
         tone: 'mixed',
-        delta: { energy: -2, career: -5, selfWorth: -4, avoidance: 4, opportunity: -4 },
+        delta: { energy: -2, career: -2, selfWorth: -1, avoidance: 3 },
       },
       {
         label: '整理三条证据',
-        description: '不包装成精英，只把做过的事拿回来。',
+        description: '不用包装成精英，只把做过的事拿回来给自己看。',
         tag: '拿回证据',
         tone: 'growth',
-        delta: { energy: -7, career: 12, selfWorth: 10, avoidance: -8, opportunity: 9 },
+        delta: { energy: -6, career: 10, selfWorth: 9, avoidance: -6, opportunity: 8 },
       },
       {
-        label: '请病假躲过去',
-        description: '今天不用面对，后面更难开口。',
-        tag: '躲开谈话',
+        label: '请半天假缓一缓',
+        description: '没状态就先歇半天，谈话改期也不是什么大事。',
+        tag: '缓一缓',
         tone: 'slump',
-        delta: { energy: 6, health: -2, career: -12, selfWorth: -8, avoidance: 12, opportunity: -8 },
+        delta: { energy: 6, health: 2, career: -2, selfWorth: 0, avoidance: 5 },
       },
     ],
   },
   {
     id: 'body',
     phase: '第 7 周',
-    title: '身体开始用疼痛发通知',
-    body: '肩颈、胃、睡眠一起开始报警。你知道它们不是突然坏掉的，只是之前一直被静音。',
-    thought: '健康不是励志指标，它是你能不能继续选择的底盘。',
+    title: '身体开始用疲惫发通知',
+    body: '肩颈、胃、睡眠都有点不对劲。它们不是突然坏掉的，只是想提醒你慢一点。',
+    thought: '身体发出的不是警报，是邀请你歇会儿。它很皮实，你善待它一点它就回来了。',
     choices: [
       {
-        label: '再熬一周',
-        description: '事情好像没停，身体也没有同意。',
-        tag: '继续硬熬',
+        label: '先躺平休息几天',
+        description: '什么都不干、好好睡——这正是身体现在最想要的。',
+        tag: '躺平回血',
         tone: 'slump',
-        delta: { energy: -8, health: -12, career: 2, selfWorth: -5, avoidance: 5, opportunity: -4 },
+        delta: { energy: 8, health: 6, career: -1, selfWorth: 1, avoidance: 5 },
       },
       {
         label: '请半天假去检查',
-        description: '损失一点工作时长，换回一点控制感。',
-        tag: '检查身体',
+        description: '花点钱看一眼，多半没事，换回不少安心。',
+        tag: '检查一下',
         tone: 'steady',
-        delta: { energy: 5, health: 11, money: -220, career: -2, selfWorth: 7, avoidance: -6, opportunity: 2 },
+        delta: { energy: 5, health: 9, money: -220, selfWorth: 6, avoidance: -3, opportunity: 2 },
       },
       {
         label: '每天先走二十分钟',
-        description: '不宏大，但身体听得懂。',
-        tag: '开始走路',
+        description: '不宏大，但身体听得懂，也最容易坚持。',
+        tag: '出门走走',
         tone: 'growth',
-        delta: { energy: 4, health: 8, selfWorth: 6, avoidance: -5, opportunity: 3 },
+        delta: { energy: 4, health: 8, selfWorth: 6, avoidance: -3, opportunity: 2 },
       },
     ],
   },
@@ -358,124 +380,125 @@ const scenarioEvents = [
     id: 'side-project',
     phase: '第 8 周',
     title: '一个旧同学问你要不要一起做小项目',
-    body: '你一边心动，一边担心自己又三分钟热度。对方要的不是承诺改变世界，只是今晚能不能先对一下方向。',
-    thought: '机会窗口不是永远开着，它通常只等到你给出一个具体动作。',
+    body: '你一边心动，一边担心自己又三分钟热度。对方要的不是承诺改变世界，只是今晚先对一下方向。',
+    thought: '机会从来不止一班车。这次没接住也没关系，下一个还会来，你随时能上车。',
     choices: [
       {
-        label: '说最近忙，先放着',
-        description: '听起来体面，窗口慢慢关上。',
-        tag: '暂时搁置',
+        label: '说最近想歇着，先放着',
+        description: '不勉强自己开新坑，也是一种清醒的选择。',
+        tag: '先不接',
         tone: 'slump',
-        delta: { energy: 3, career: -3, relationships: -3, selfWorth: -5, avoidance: 8, opportunity: -13 },
+        delta: { energy: 3, selfWorth: 1, avoidance: 5, opportunity: -3 },
       },
       {
         label: '约三十分钟电话',
-        description: '不装很厉害，只验证能不能开始。',
+        description: '不装很厉害，只是先聊聊能不能开始，零压力。',
         tag: '先通电话',
         tone: 'growth',
-        delta: { energy: -6, career: 8, relationships: 6, selfWorth: 8, avoidance: -8, opportunity: 12 },
+        delta: { energy: -5, career: 7, relationships: 6, selfWorth: 8, avoidance: -6, opportunity: 10 },
       },
       {
         label: '一口答应全包',
-        description: '像重启，实际可能把自己推回透支。',
-        tag: '用力过猛',
+        description: '热情上头，记得给自己留点回血的空间就好。',
+        tag: '一腔热血',
         tone: 'mixed',
-        delta: { energy: -14, health: -5, career: 6, relationships: -2, selfWorth: 3, avoidance: -4, opportunity: 8 },
+        delta: { energy: -10, health: -3, career: 6, relationships: 2, selfWorth: 4, opportunity: 8 },
       },
     ],
   },
   {
     id: 'loan',
     phase: '第 9 周',
-    title: '分期广告在你最焦虑时出现',
-    body: '那件东西确实能让你短暂开心，也能让账户下个月更难看。页面只差一次指纹确认。',
-    thought: '消费不是错，错的是用未来的钱麻醉现在的羞耻。',
+    title: '一件想买的东西，正好在你最累时出现',
+    body: '它确实能让你开心一阵，也会让下个月账户紧一点。页面只差一次指纹确认。',
+    thought: '想要点东西犒劳自己，太正常了。买了也不会破产，缓缓再决定也完全没问题。',
     choices: [
       {
         label: '直接买，先开心',
-        description: '即时奖励很强，下个月会来收账。',
-        tag: '买下安慰',
+        description: '偶尔哄哄自己没什么，这点钱不会动摇你的底盘。',
+        tag: '犒劳一下',
         tone: 'slump',
-        delta: { energy: 5, money: -980, selfWorth: -7, avoidance: 8, opportunity: -5 },
+        delta: { energy: 5, money: -480, selfWorth: 2, avoidance: 4 },
       },
       {
         label: '放入 72 小时清单',
-        description: '不是禁止自己想要，而是让冲动降温。',
-        tag: '延迟决定',
+        description: '不禁止自己想要，只是让冲动先降降温。',
+        tag: '缓三天',
         tone: 'steady',
-        delta: { energy: -2, money: 120, selfWorth: 8, avoidance: -7, opportunity: 3 },
+        delta: { energy: -1, money: 120, selfWorth: 7, avoidance: -4, opportunity: 2 },
       },
       {
         label: '把钱转进房租账户',
-        description: '不浪漫，但让生活少一个炸点。',
+        description: '不浪漫，但让生活更稳，心里更踏实。',
         tag: '保住底盘',
         tone: 'growth',
-        delta: { energy: -4, money: 260, selfWorth: 7, avoidance: -6, opportunity: 2 },
+        delta: { energy: -3, money: 260, selfWorth: 7, avoidance: -4, opportunity: 2 },
       },
     ],
   },
   {
     id: 'morning',
     phase: '第 10 周',
-    title: '一个普通早晨，你突然不想再等了',
-    body: '没有电影配乐，没有巨大转折。只是你发现，人生一直被推迟，也是一种持续发生的选择。',
-    thought: '所谓重启，往往不是大喊一次，而是把今天的一件事做完。',
+    title: '一个普通早晨，你发现也没什么大事发生',
+    body: '没有电影配乐，没有巨大转折。摆烂了这一阵，天没塌，你还好好的——日子原来这么禁得起折腾。',
+    thought: '回头看，你担心的那些最坏情况，几乎没一个真的发生。想动的时候，从一件小事开始就够了。',
     choices: [
       {
         label: '列三件今天能完成的小事',
-        description: '你没有翻身，只是先把身体转向出口。',
+        description: '不用翻身，只是先把身体轻轻转向出口。',
         tag: '小事开局',
         tone: 'growth',
-        delta: { energy: -3, career: 6, health: 3, selfWorth: 10, avoidance: -10, opportunity: 6 },
+        delta: { energy: -2, career: 6, health: 3, selfWorth: 9, avoidance: -7, opportunity: 6 },
       },
       {
-        label: '等一个更有状态的明天',
-        description: '明天也许会来，也许只是今天的复制。',
-        tag: '等待状态',
+        label: '再多歇一阵也行',
+        description: '休息够了自然会想动，不必逼自己赶哪个进度。',
+        tag: '继续歇着',
         tone: 'slump',
-        delta: { energy: 2, career: -4, selfWorth: -6, avoidance: 8, opportunity: -6 },
+        delta: { energy: 4, health: 2, selfWorth: 1, avoidance: 5 },
       },
       {
-        label: '找人约一个监督节点',
-        description: '把“想改变”从脑内搬到现实日程。',
-        tag: '约定节点',
+        label: '找人约一个轻松的节点',
+        description: '把“想动一动”从脑内搬到日程，有人陪着更轻松。',
+        tag: '约个节点',
         tone: 'bond',
-        delta: { energy: -4, relationships: 8, career: 4, selfWorth: 8, avoidance: -9, opportunity: 7 },
+        delta: { energy: -3, relationships: 8, career: 4, selfWorth: 8, avoidance: -6, opportunity: 6 },
       },
     ],
   },
 ];
 
+// 反焦虑改版：摆烂关键词不再重罚，反而承认它的休息价值；其它规则保持温和正向。
 const customRules = [
   {
-    label: '主动修复',
+    label: '动一动',
     tone: 'growth',
     words: ['学习', '写', '计划', '简历', '作品', '投递', '复盘', '开始', '整理', '行动'],
-    delta: { energy: -5, career: 7, selfWorth: 8, avoidance: -8, opportunity: 7 },
+    delta: { energy: -4, career: 6, selfWorth: 8, avoidance: -6, opportunity: 6 },
   },
   {
-    label: '请求支撑',
+    label: '找人靠一靠',
     tone: 'bond',
     words: ['朋友', '家人', '沟通', '聊聊', '求助', '坦白', '约', '一起', '告诉'],
-    delta: { energy: -3, relationships: 8, selfWorth: 6, avoidance: -6, opportunity: 3 },
+    delta: { energy: -2, relationships: 8, selfWorth: 6, avoidance: -5, opportunity: 3 },
   },
   {
-    label: '保住身体',
+    label: '善待身体',
     tone: 'steady',
     words: ['睡', '休息', '运动', '散步', '跑步', '吃饭', '做饭', '医生', '医院', '检查'],
-    delta: { energy: 6, health: 8, selfWorth: 4, avoidance: -4, opportunity: 2 },
+    delta: { energy: 6, health: 8, selfWorth: 4, avoidance: -2, opportunity: 2 },
   },
   {
-    label: '继续后撤',
+    label: '歇一会儿',
     tone: 'slump',
     words: ['摆', '躺', '算了', '不想', '拖', '明天', '逃', '刷', '游戏', '随便'],
-    delta: { energy: 4, health: -4, career: -5, relationships: -3, selfWorth: -7, avoidance: 9, opportunity: -5 },
+    delta: { energy: 6, health: 2, selfWorth: 1, avoidance: 5 },
   },
   {
-    label: '现金冒险',
+    label: '花点钱',
     tone: 'mixed',
     words: ['辞职', '裸辞', '贷款', '借钱', '分期', '买', '花钱', '外卖'],
-    delta: { energy: 2, money: -520, career: -4, selfWorth: -3, avoidance: 4, opportunity: -3 },
+    delta: { energy: 3, money: -260, selfWorth: 1, avoidance: 2 },
   },
 ];
 
@@ -889,11 +912,11 @@ function statProgress(key, value) {
 }
 
 function getCurrentInertia(stats) {
-  if (stats.avoidance > 72 && stats.opportunity < 42) return '后撤惯性正在扩大';
-  if (stats.selfWorth > 68 && stats.avoidance < 45) return '重启惯性开始成形';
-  if (stats.relationships > 66 && stats.health > 62) return '支撑网络正在变厚';
-  if (stats.money < 800) return '现金压力正在压缩选择';
-  return '仍在拉扯，但路径还没锁死';
+  if (stats.avoidance > 72 && stats.opportunity < 42) return '你在好好歇着——这没什么不对';
+  if (stats.selfWorth > 68 && stats.avoidance < 45) return '状态在慢慢回来，不急';
+  if (stats.relationships > 66 && stats.health > 62) return '有人和身体在稳稳托着你';
+  if (stats.money < 800) return '现金紧一点，但退路还有的是';
+  return '怎么走都行，路还很宽';
 }
 
 function deriveCustomMove(rawText) {
@@ -930,9 +953,9 @@ function buildForecast(stats, turnCount) {
   const raw = [
     {
       id: 'slump',
-      label: '温和下沉',
-      copy: '日子能过，但选择越来越窄。',
-      color: '#c64b3b',
+      label: '低配人生',
+      copy: '钱包瘦一点、节奏慢一点，但你饿不着、塌不了。',
+      color: '#b88a5a',
       score:
         stats.avoidance * 0.42 +
         (100 - stats.selfWorth) * 0.2 +
@@ -941,9 +964,9 @@ function buildForecast(stats, turnCount) {
     },
     {
       id: 'reboot',
-      label: '间歇重启',
-      copy: '不是逆袭，是开始恢复行动感。',
-      color: '#327f68',
+      label: '慢慢回血',
+      copy: '不是逆袭，只是行动感一点点回来。',
+      color: '#5f8f6b',
       score:
         (100 - stats.avoidance) * 0.26 +
         stats.career * 0.2 +
@@ -965,7 +988,7 @@ function buildForecast(stats, turnCount) {
     {
       id: 'loop',
       label: '反复横跳',
-      copy: '有几次清醒，也有几次回到原点。',
+      copy: '清醒几次，也躺平几次——路没锁死，随时能选。',
       color: '#b48a00',
       score:
         stats.energy * 0.16 +
@@ -1000,17 +1023,17 @@ function buildEnding(stats, history, forecast) {
     .slice(0, 3);
 
   const titleMap = {
-    slump: '你没有彻底失败，只是把生活过成了越来越窄的走廊',
-    reboot: '你没有突然逆袭，但开始重新拥有下一步',
-    stable: '你把野心调小了一点，也把底盘托稳了一点',
-    loop: '你还在反复横跳，不过已经看见惯性在哪里发力',
+    slump: '你没有失败，只是把日子过成了低配版——而它依然能过',
+    reboot: '你没有突然逆袭，但下一步已经重新长出来了',
+    stable: '你把野心调小了一点，也把日子托得更稳了',
+    loop: '你还在反复横跳，而这恰恰说明：什么都还来得及',
   };
 
   const summaryMap = {
-    slump: '这条路径的核心不是懒，而是每次短暂止痛都让未来的你少一个选项。真正的转折点会出现在你愿意把一个问题放到现实里处理的时候。',
-    reboot: '你没有靠热血解决人生，而是用几次小动作把逃避惯性打断了。后续最重要的是把这些小动作固定成外部节点。',
-    stable: '你开始承认“先活稳”也是一种选择。关系、健康和现金流被托住之后，很多长期问题才有空间慢慢处理。',
-    loop: '你既会清醒，也会后撤。这个结局最适合继续玩，因为它说明路径还没有锁死，只是需要更少靠意志力的设计。',
+    slump: '摆烂的代价远没有想象中可怕：钱少花点、节奏慢一点，但你饿不着、塌不了，随时能重新开始。你担心的那些最坏结局，几乎一个都没发生。最坏，也不过如此。',
+    reboot: '你不需要靠热血翻盘。几个小动作就够把惯性松一松，剩下的交给时间——它一直站在你这边。',
+    stable: '先把自己活稳，也是一种了不起的选择。关系、身体、现金被托住之后，很多事自然就有了喘息的空间。',
+    loop: '会清醒也会躺平，太正常了。这一局最适合继续玩，因为它证明：你随时能换个方向，没有什么是定死的。',
   };
 
   return {
@@ -1051,7 +1074,11 @@ function App() {
   const [pathNodes, setPathNodes] = useState(() => [createStartNode(personas[0])]);
   const [freeText, setFreeText] = useState('');
   const [showEnding, setShowEnding] = useState(false);
+  const [cohort, setCohort] = useState(null);
+  const [cohortLoading, setCohortLoading] = useState(false);
+  const [cohortError, setCohortError] = useState('');
   const generationRunRef = useRef(0);
+  const cohortRunRef = useRef(0);
   const movesMadeRef = useRef(0);
 
   const currentEvent = currentEvents[Math.min(turnIndex, currentEvents.length - 1)];
@@ -1059,6 +1086,38 @@ function App() {
   const isFinished = showEnding || movesMade >= MAX_TURNS;
   const forecast = useMemo(() => buildForecast(stats, movesMade), [stats, movesMade]);
   const ending = useMemo(() => buildEnding(stats, history, forecast), [stats, history, forecast]);
+
+  async function loadCohort() {
+    if (cohortLoading) return;
+    const runId = cohortRunRef.current + 1;
+    cohortRunRef.current = runId;
+    setCohortLoading(true);
+    setCohortError('');
+    try {
+      const data = await fetchCohort({
+        profile: activeProfile,
+        persona,
+        stats,
+        path: history.map((entry) => ({ decision: entry.decision, tag: entry.eventTitle })),
+        leading: forecast[0]?.label,
+      });
+      if (cohortRunRef.current !== runId) return;
+      setCohort(data);
+    } catch (error) {
+      if (cohortRunRef.current !== runId) return;
+      setCohortError(explainGenerationError(error));
+    } finally {
+      if (cohortRunRef.current === runId) setCohortLoading(false);
+    }
+  }
+
+  // 走到结局时自动召唤「同路人」，让收尾落在「一群人后来都还好」。
+  useEffect(() => {
+    if (isFinished && !cohort && !cohortLoading && !cohortError) {
+      loadCohort();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinished]);
 
   function restart(nextPersonaId = personaId, override = {}) {
     if (!override.keepPendingGeneration) {
@@ -1082,6 +1141,10 @@ function App() {
     setPathNodes([createStartNode(nextPersona, nextProfile, nextPersonalized)]);
     setFreeText('');
     setShowEnding(false);
+    cohortRunRef.current += 1;
+    setCohort(null);
+    setCohortLoading(false);
+    setCohortError('');
     setIsPersonalized(nextPersonalized);
     setGenerationSource(override.source ?? (nextPersonalized ? '本地规则' : '预设剧情'));
     setGenerationNote(override.note ?? (nextPersonalized ? '已生成个人路径' : '使用预设剧情'));
@@ -1188,7 +1251,7 @@ function App() {
           </span>
           <div>
             <h1>开摆之后</h1>
-            <p>一个人生惯性模拟器</p>
+            <p>最坏也不过如此 · 一个让你松口气的人生模拟器</p>
           </div>
         </div>
         <div className="topbar-actions">
@@ -1274,6 +1337,16 @@ function App() {
         <EndingReport ending={ending} history={history} restart={restart} />
       ) : (
         <ForecastPanel forecast={forecast} inertia={getCurrentInertia(stats)} />
+      )}
+
+      {isFinished && (
+        <CohortPanel
+          cohort={cohort}
+          loading={cohortLoading}
+          error={cohortError}
+          onLoad={loadCohort}
+          movesMade={movesMade}
+        />
       )}
     </main>
   );
@@ -1420,7 +1493,8 @@ function LedgerPanel({ stats, persona, history, profile, isPersonalized }) {
 
 function StatRow({ meta, value }) {
   const Icon = meta.icon;
-  const danger = meta.inverted ? value > 68 : value < 32;
+  // 反焦虑改版：不再用红色告警制造紧张，数值低也只是「现在这样」，没什么可怕。
+  const danger = false;
 
   return (
     <div className={danger ? 'stat-row danger' : 'stat-row'} style={{ '--accent': meta.color }}>
@@ -1654,6 +1728,67 @@ function ForecastPanel({ forecast, inertia }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function CohortPanel({ cohort, loading, error, onLoad, movesMade }) {
+  return (
+    <section className="panel cohort-panel">
+      <div className="panel-heading">
+        <span className="heading-icon">
+          <Users size={18} aria-hidden="true" />
+        </span>
+        <div>
+          <h2>同路人 · 真实预测</h2>
+          <p>走到这一步的人，后来都怎么样了</p>
+        </div>
+      </div>
+
+      {!cohort && !loading && (
+        <div className="cohort-cta">
+          <p>
+            {movesMade === 0
+              ? '先走几步，我帮你找几个有相似经历、却走了不同路的人，看看他们后来过得怎样。'
+              : '找几个和你处境相似、却走了不同路的人，看看他们几年后过得怎样——多半没那么糟。'}
+          </p>
+          <button className="primary-button" type="button" onClick={onLoad}>
+            <Sparkles size={18} aria-hidden="true" />
+            看看同路人后来怎么样了
+          </button>
+          {error && <p className="cohort-error">{error}</p>}
+        </div>
+      )}
+
+      {loading && (
+        <div className="cohort-cta">
+          <p className="cohort-loading">正在翻找和你走过相似路的人…</p>
+        </div>
+      )}
+
+      {cohort && (
+        <>
+          <div className="cohort-list">
+            {cohort.cohort.map((person, index) => (
+              <div className="cohort-card" key={index}>
+                <strong>{person.who}</strong>
+                <span className="cohort-similar">当年 · {person.similar}</span>
+                <span className="cohort-now">后来 · {person.now}</span>
+              </div>
+            ))}
+          </div>
+          <div className="cohort-prediction">
+            <h3>给你的真实预测</h3>
+            <p>{cohort.prediction}</p>
+            {cohort.reassurance && <p className="cohort-reassure">🛟 {cohort.reassurance}</p>}
+          </div>
+          <button className="secondary-button" type="button" onClick={onLoad} disabled={loading}>
+            <RotateCcw size={16} aria-hidden="true" />
+            换一批同路人
+          </button>
+          {error && <p className="cohort-error">{error}</p>}
+        </>
+      )}
     </section>
   );
 }
